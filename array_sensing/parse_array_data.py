@@ -245,7 +245,7 @@ def scale_min_max(plate, no_pep):
         del fluor_data[grp35]  # Removes collapsed barrel (experimental control only)
         scaled_plate[analyte] = fluor_data
 
-    return scaled_plate
+    return scaled_plate, grp35
 
 
 class parse_array_data():
@@ -311,21 +311,24 @@ class parse_array_data():
         - no_pep: Name of sample without peptide in peptide layout
         """
 
+        plates = {}
         ind_meas_df = {}
         saturated_readings = []
 
         for repeat, xlsx_list in self.ind_meas_xlsx.items():
+            plates[repeat] = []
             ind_meas_df[repeat] = []  # List rather than dictionary because
             # analyte name(s) is/are read from the plate not the file name
 
             for xlsx in xlsx_list:
                 file_path = self.dir_path + xlsx
                 plate = parse_xlsx_to_dataframe(file_path, self.peptides, self.gain)
+                plates[repeat].append(plate)
                 saturated_readings = check_for_saturation(
                     saturated_readings, plate, file_path, self.min_fluor,
                     self.max_fluor
                 )
-                scaled_plate = scale_min_max(plate, no_pep)
+                scaled_plate, grp35 = scale_min_max(plate, no_pep)
                 ind_meas_df[repeat].append(scaled_plate)
 
         if saturated_readings != []:
@@ -336,7 +339,11 @@ class parse_array_data():
                 ' the identified barrels, or replace the fluorescence\nreadings'
                 ' for this barrel with readings collected at a different gain, '
                 'for ALL xlsx files in the dataset.'.format(saturated_readings))
+
+        self.plates = plates
         self.ind_meas_df = ind_meas_df
+        self.features = [feature for feature in self.peptides
+                         if not feature in [no_pep, grp35]]
 
     def combine_plate_readings(self):
         """
@@ -365,7 +372,7 @@ class parse_array_data():
                 labels.append(analyte)
 
         fluor_df = pd.DataFrame({'Analyte': labels,
-                                 ', '.join(self.peptides): fluor_data})
+                                 ', '.join(self.features): fluor_data})
         self.fluor_data = fluor_df
 
     def standardise_readings(self):
@@ -373,12 +380,12 @@ class parse_array_data():
         Standardises fluorescence data across features (i.e. the peptides)
         """
 
-        fluor_data = self.fluor_data[', '.join(self.peptides)]
+        fluor_data = self.fluor_data[', '.join(self.features)]
         standardized_fluor_data = preprocessing.scale(
             np.array(fluor_data.tolist()), axis=0
         )  # Normalises (by subtracting the mean and dividing by the standard
         # deviation) the readings for each peptide, as required by several ML
         # algorithms
         standardized_fluor_data = pd.DataFrame({'Analyte': self.fluor_data['Analyte'].tolist(),
-                                                ', '.join(self.peptides): standardized_fluor_data.tolist()})
+                                                ', '.join(self.features): standardized_fluor_data.tolist()})
         self.standardized_fluor_data = standardized_fluor_data
