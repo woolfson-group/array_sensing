@@ -18,19 +18,19 @@ else:
         PlateLayoutError, FluorescenceSaturationError
     )
 
-def parse_xlsx_to_dataframe(file_path, peptide_list, gain):
+def parse_xlsx_to_dataframe(plate_path, peptide_list, gain):
     """
     Converts an excel xlsx file output from the plate reader into a pandas
     dataframe.
 
     The layout of analytes and peptides on the plate is read from the "Plate
-    Information" sheet in the xlsx file, and used to group 8x2 blocks of
+    Information" sheet in the xlsx file, and used to group rxc blocks of
     fluorescence readings collected for the same analyte in the "End Point"
     sheet.
 
     Input
     ----------
-    - file_path: File path to input xlsx file
+    - plate_path: File path to input xlsx file
     - peptide_list: List of barrel names
     - gain: Which dataframe of fluorescence data (collected at different gains)
     to use
@@ -43,25 +43,29 @@ def parse_xlsx_to_dataframe(file_path, peptide_list, gain):
 
     # Determines which table of fluorescence data (collected at different
     # gains with the fluorimeter) to use. By default uses the first listed.
-    if type(gain) != int:
-        raise TypeError('Gain value not recognised.')
+    if (
+           (type(gain) != int)
+        or (type(gain) == int and gain <= 0)
+    ):
+        raise TypeError('Gain value not recognised. Please specify a positive'
+                        ' integer')
     skiprows = (gain*19)-5
-    print('Parsing plate {}'.format(file_path))
+    print('Parsing plate {}'.format(plate_path))
 
     # Reads fluorescence data from "End point" sheet
     fluor_df = pd.read_excel(
-        file_path, sheet_name='End point', skiprows=skiprows, nrows=16,
-        index_col=0
+        plate_path, sheet_name='End point', skiprows=skiprows, nrows=16,
+        index_col=0, usecols=range(25)
     ).reset_index(drop=True)
 
     # Reads class labels from metadata in "Protocol Information" sheet
     protocol_df = pd.read_excel(
-        file_path, sheet_name='Protocol Information', index_col=0
+        plate_path, sheet_name='Protocol Information', index_col=0
     )
     start_row = protocol_df.index.tolist().index('Plate layout')
     label_df = pd.read_excel(
-        file_path, sheet_name='Protocol Information', index_col=0,
-        skiprows=start_row+2, nrows=2, usecols=range(13)
+        plate_path, sheet_name='Protocol Information', skiprows=start_row+2,
+        nrows=2, index_col=0, usecols=range(13)
     )
     label_df = label_df.replace(
         to_replace='[bB][lL][aA][nN][kK]', value='blank', regex=True
@@ -70,13 +74,22 @@ def parse_xlsx_to_dataframe(file_path, peptide_list, gain):
     label_array = label_df.to_numpy()
     label_set = list(set([col for row in label_array for col in row]))
 
-    # Reads peptide names from metadata in "Protocol Information" sheet
+    # Reads peptide layout and names from metadata in "Protocol Information"
+    # sheet
     start_row = protocol_df.index.tolist().index('Peptide layout')
     peptide_arrang = pd.read_excel(
-    file_path, sheet_name='Protocol Information', index_col=None,
-        skiprows=start_row+1, nrows=8,  usecols=range(2)
+        plate_path, sheet_name='Protocol Information', skiprows=start_row+1,
+        nrows=8,  index_col=None, usecols=range(2)
     )
+    r = peptide_arrang.shape[0]
+    c = peptide_arrang.shape[1]
     peptide_arrang = peptide_arrang.to_numpy().flatten('F')
+
+    # Checks that peptides listed in the xlsx file are the same as those input
+    # by the user
+    if sorted(peptide_list) != sorted(peptide_arrang):
+        raise PlateLayoutError('Peptides tested in {} don\'t match peptides '
+                               'specified by user'.format(plate_path))
 
     # Combines fluorescence data collected for the same analyte into a
     # dataframe
@@ -89,15 +102,15 @@ def parse_xlsx_to_dataframe(file_path, peptide_list, gain):
         index_r = index[0]
         index_c = index[1]
 
-        rows = np.arange((8*index_r), ((8*index_r)+9))  # +9 so that
-        # row range covers 8 rows
-        columns = np.arange(2*(index_c), ((2*index_c)+3))  # +3 so that
-        # column range covers 2 columns
+        rows = np.arange((r*index_r), ((r*index_r)+(r+1)))  # + (r+1) so that
+        # row range covers r rows
+        columns = np.arange(c*(index_c), ((c*index_c)+(c+1)))  # + (c+1) so
+        # that column range covers 2 columns
 
         sub_fluor_df = fluor_df.iloc[rows[0]:rows[-1], columns[0]:columns[-1]]
         sub_fluor_vals = sub_fluor_df.to_numpy().flatten('F')
 
-        # Ensures the order of the peptide labels provided by the user match
+        # Ensures the order of the peptide labels provided by the user matches
         # the order listed in the input xlsx file
         ordered_fluor_vals = []
         for peptide in peptide_list:
@@ -105,12 +118,12 @@ def parse_xlsx_to_dataframe(file_path, peptide_list, gain):
             if len(position) > 1:
                 raise PlateLayoutError(
                     'Barrel {} listed more than once in peptide arrangement '
-                    'for plate {}'.format(peptide, file_path)
+                    'for plate {}'.format(peptide, plate_path)
                 )
             elif len(position) < 1:
                 raise PlateLayoutError(
                     'Barrel {} not listed in peptide arrangement for plate '
-                    '{}'.format(peptide, file_path)
+                    '{}'.format(peptide, plate_path)
                 )
             ordered_fluor_vals.append(sub_fluor_vals[position[0]])
 
@@ -145,7 +158,8 @@ def check_for_saturation(saturated_readings, plate, plate_path, min_fluor,
 
     Output
     ----------
-
+    - saturated_readings: Updated list of saturated measurements, identified by
+    plate file path and barrel name
     """
 
     for analyte, fluor_df in plate.items():
@@ -174,10 +188,10 @@ def remove_outliers_and_average(input_df):
     - output_ser: Series, dimensions = n_features
     """
 
-    output_ser = input_df[
+    output_df = input_df[
         np.abs(input_df - input_df.mean()) <= (1.96*input_df.std())
     ]
-    output_ser = output_ser.mean()
+    output_ser = output_df.mean()
 
     return output_ser
 
@@ -248,7 +262,34 @@ def scale_min_max(plate, no_pep):
     return scaled_plate, grp35
 
 
-class parse_array_data():
+class def_data():
+
+    def __init__(self, dir_path, repeat_names, peptide_list):
+        """
+        - dir_path: Path (either absolute or relative) to directory containing
+        xlsx files of fluorescence readings
+        - repeat_names: Names used to label different repeat readings of the
+        same analytes in the xlsx file names. **NOTE: the same repeat name
+        should be used for all analytes in the same repeat (hence date is
+        probably not the best label unless all analytes in the repeat run were
+        measured on the same day)**.
+        - peptide_list: List of barrel names
+        """
+
+        self.dir_path = dir_path
+        self.repeats = repeat_names
+        self.peptides = peptide_list
+
+        if not os.path.isdir(self.dir_path):
+            raise FileNotFoundError('Path to working directory not recognised')
+        if len(self.peptides) != len(set(self.peptides)):
+            raise PlateLayoutError(
+                'Barrel {} listed more than once'.format(peptide)
+            )
+
+
+class parse_array_data(def_data):
+
 
     def __init__(self, dir_path, repeat_names, peptide_list, gain=1,
                  min_fluor=0, max_fluor=260000):
@@ -268,21 +309,10 @@ class parse_array_data():
         - max_fluor: Maximum fluorescence reading that can be measured by the
         plate reader, default is 260,000
         """
-
-        self.dir_path = dir_path
-        self.repeats = repeat_names
-        self.peptides = peptide_list
+        def_data.__init__(self, dir_path, repeat_names, peptide_list)
         self.gain = gain
         self.min_fluor = min_fluor
         self.max_fluor = max_fluor
-
-        if not os.path.isdir(self.dir_path):
-            raise FileNotFoundError('Path to working directory not recognised')
-        if len(self.peptides) != len(set(self.peptides)):
-            raise PlateLayoutError(
-                'Barrel {} listed more than once in peptide arrangement for '
-                'plate {}'.format(peptide, file_path)
-            )
 
     def group_xlsx_repeats(self):
         """
@@ -296,7 +326,11 @@ class parse_array_data():
             ind_meas_xlsx[repeat] = []
 
             for file_name in os.listdir(self.dir_path):
-                if file_name.endswith('xlsx') and repeat in file_name:
+                if (
+                        file_name.endswith('xlsx')
+                    and not file_name.startswith('~$')
+                    and repeat in file_name
+                ):
                     ind_meas_xlsx[repeat].append(file_name)
 
         self.ind_meas_xlsx = ind_meas_xlsx
@@ -321,11 +355,11 @@ class parse_array_data():
             # analyte name(s) is/are read from the plate not the file name
 
             for xlsx in xlsx_list:
-                file_path = self.dir_path + xlsx
-                plate = parse_xlsx_to_dataframe(file_path, self.peptides, self.gain)
+                plate_path = self.dir_path + xlsx
+                plate = parse_xlsx_to_dataframe(plate_path, self.peptides, self.gain)
                 plates[repeat].append(plate)
                 saturated_readings = check_for_saturation(
-                    saturated_readings, plate, file_path, self.min_fluor,
+                    saturated_readings, plate, plate_path, self.min_fluor,
                     self.max_fluor
                 )
                 scaled_plate, grp35 = scale_min_max(plate, no_pep)
@@ -363,7 +397,7 @@ class parse_array_data():
 
                 for plate in plate_list:
                     if analyte in list(plate.keys()):
-                        analyte_dfs.append(plate[analyte])
+                        analyte_dfs.append(copy.deepcopy(plate[analyte]))
 
                 analyte_df = pd.concat(analyte_dfs, axis=0).reset_index(drop=True)
                 readings = remove_outliers_and_average(analyte_df).tolist()
@@ -371,8 +405,10 @@ class parse_array_data():
                 fluor_data.append(readings)
                 labels.append(analyte)
 
-        fluor_df = pd.DataFrame({'Analyte': labels,
-                                 ', '.join(self.features): fluor_data})
+        fluor_df = pd.DataFrame(fluor_data)
+        labels_df = pd.DataFrame({'Analyte': labels})
+        fluor_df = pd.concat([fluor_df, labels_df], axis=1)
+        fluor_df.columns = self.features + ['Analyte']
         self.fluor_data = fluor_df
 
     def standardise_readings(self):
@@ -380,12 +416,15 @@ class parse_array_data():
         Standardises fluorescence data across features (i.e. the peptides)
         """
 
-        fluor_data = self.fluor_data[', '.join(self.features)]
-        standardized_fluor_data = preprocessing.scale(
-            np.array(fluor_data.tolist()), axis=0
+        analyte_labels = self.fluor_data.loc[:, 'Analyte']
+        fluor_data = self.fluor_data.drop('Analyte', axis=1)
+        standardised_fluor_data = preprocessing.scale(
+            fluor_data.to_numpy(), axis=0
         )  # Normalises (by subtracting the mean and dividing by the standard
         # deviation) the readings for each peptide, as required by several ML
         # algorithms
-        standardized_fluor_data = pd.DataFrame({'Analyte': self.fluor_data['Analyte'].tolist(),
-                                                ', '.join(self.features): standardized_fluor_data.tolist()})
-        self.standardized_fluor_data = standardized_fluor_data
+        standardised_fluor_df = pd.concat(
+            [pd.DataFrame(fluor_data), analyte_labels], axis=1
+        )
+        standardised_fluor_df.columns = self.features + ['Analyte']
+        self.standardised_fluor_data = standardised_fluor_df
