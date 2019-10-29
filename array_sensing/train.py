@@ -18,7 +18,10 @@ else:
 
 class run_ml(def_data):
 
-    def __init__(self, dir_path, repeat_names, peptide_list, data):
+    def __init__(
+        self, dir_path, repeat_names, peptide_list, results_dir, data,
+        classes=None
+    ):
         """
         - dir_path: Path (either absolute or relative) to directory containing
         xlsx files of fluorescence readings
@@ -31,8 +34,94 @@ class run_ml(def_data):
         - data: Dataframe of (standardised) fluorescence readings (output from
         parse_array_data class)
         """
-        def_data.__init__(self, dir_path, repeat_names, peptide_list)
+        def_data.__init__(self, dir_path, repeat_names, peptide_list, results_dir)
         self.data = data
+
+        self.classes = classes
+        if self.classes is None:
+            self.subclass_split = False
+        else:
+            self.subclass_split = True
+
+        self.x = copy.deepcopy(self.data.drop('Analyte', axis=1)).to_numpy()
+        if self.subclass_split is True:
+            self.y = copy.deepcopy(self.classes)
+            self.groups = copy.deepcopy(self.data['Analyte']).to_numpy()
+        elif self.subclass_split is False:
+            self.y = copy.deepcopy(self.data['Analyte']).to_numpy()
+            self.groups = None
+
+    def scramble_class_labels(self):
+        """
+        """
+
+        import random
+
+        index = [n for n in range(self.data.shape[0])]
+        random.shuffle(index)
+
+        self.data = self.data.iloc[index,].reset_index(drop=True)
+        self.x = self.x[index]
+        self.y = self.y[index]
+        if self.subclass_split is True:
+            self.groups = self.groups[index]
+
+    def randomly_pick_subclasses(self, percent_test):
+        """
+        Randomly selects subclasses to be saved as test set.
+        N.B. Requires equal class sizes
+        """
+
+        if self.subclass_split is False:
+            raise TypeError('Inappropriate data format for this function. You '
+                            'need to define the classes argument when '
+                            'initialising a run_ml object.')
+
+        import random
+
+        subclasses = list(self.groups)
+        classes = list(self.y)
+        set_subclasses = list(set(subclasses))
+        set_classes = list(set(classes))
+
+        organised_classes = {}
+        for n in range(len(classes)):
+            class_val = classes[n]
+            subclass_val = subclasses[n]
+            if not class_val in organised_classes:
+                organised_classes[class_val] = []
+            if not subclass_val in organised_classes[class_val]:
+                organised_classes[class_val].append(subclass_val)
+
+        class_lens = [len(organised_classes[class_val])
+                      for class_val in organised_classes.keys()]
+
+        if len(set(class_lens)) != 1:
+            raise RuntimeError(
+                'Class sizes are unequal:\n{}\nPlease update your input '
+                'dataset to contain equal class sizes'
+            )
+
+        for class_val in organised_classes.keys():
+            random.shuffle(organised_classes[class_val])
+
+        organised_classes = np.array(list(organised_classes.values())).transpose()
+
+        num_test = organised_classes.shape[0]*percent_test
+        if (organised_classes.shape[0] / num_test) % 1 != 0:
+            raise ValueError(
+                'Multiplying the class size by percent_test gives a non-integer'
+                ' value.\nPlease change the value of percent_test to allow '
+                'division of the classes into subsets of equal (integer!) size'
+            )
+        else:
+            num_test = int(num_test)
+        organised_classes = [
+            organised_classes[i:i+num_test,].flatten('C') for i in
+            [int(n) for n in range(0, organised_classes.shape[0], num_test)]
+        ]
+
+        return organised_classes
 
     def split_train_test_data(self, randomise, percent_test, test_analytes):
         """
@@ -79,24 +168,33 @@ class run_ml(def_data):
 
         if randomise is True:
             from sklearn.model_selection import StratifiedKFold
-            self.cv = StratifiedKFold(n_splits=len(self.repeats), shuffle=False)
+
+            y_vals = self.train_data['Analyte'].tolist()
+            n_splits = len(y_vals)
+            for data_class in set(y_vals):
+                count = y_vals.count(data_class)
+                if count < n_splits:
+                    n_splits = count
+
+            self.cv = StratifiedKFold(n_splits=n_splits, shuffle=True)
+
         elif randomise is False:
             from sklearn.model_selection import GroupKFold
             self.cv = GroupKFold(n_splits=len(self.repeats))
 
-        self.train_x = self.train_data.drop('Analyte', axis=1).to_numpy()
-        self.test_x = self.test_data.drop('Analyte', axis=1).to_numpy()
+        self.train_x = copy.deepcopy(self.train_data.drop('Analyte', axis=1)).to_numpy()
+        self.test_x = copy.deepcopy(self.test_data.drop('Analyte', axis=1)).to_numpy()
 
         if randomise is True:
-            self.train_y = self.train_data['Analyte'].to_numpy()
+            self.train_y = copy.deepcopy(self.train_data['Analyte']).to_numpy()
             self.train_group = None
-            self.test_y = self.test_data['Analyte'].to_numpy()
+            self.test_y = copy.deepcopy(self.test_data['Analyte']).to_numpy()
             self.test_group = None
         elif randomise is False:
             self.train_y = np.array([val.split()[0] for val in self.train_data['Analyte'].tolist()])
-            self.train_group = self.train_data['Analyte'].to_numpy()
+            self.train_group = copy.deepcopy(self.train_data['Analyte']).to_numpy()
             self.test_y = np.array([val.split()[0] for val in self.test_data['Analyte'].tolist()])
-            self.test_group = self.test_data['Analyte'].to_numpy()
+            self.test_group = copy.deepcopy(self.test_data['Analyte']).to_numpy()
 
     def calc_feature_correlations(self, train_data):
         """
@@ -108,9 +206,12 @@ class run_ml(def_data):
 
         plt.clf()
         heatmap = sns.heatmap(
-            data=correlation_matrix, cmap='RdBu_r', annot=True
+            data=correlation_matrix, cmap='RdBu_r', annot=True,
+            xticklabels=True, yticklabels=True
         )
-        plt.savefig('Feature_correlations_Spearman_rank.svg')
+        plt.xticks(rotation='vertical')
+        plt.yticks(rotation='horizontal')
+        plt.savefig('{}/Feature_correlations_Spearman_rank.svg'.format(self.results_dir))
         plt.show()
 
         return correlation_matrix
@@ -127,7 +228,10 @@ class run_ml(def_data):
 
         plt.clf()
         barplot = sns.barplot(x=features, y=model.scores_)
-        plt.savefig('KBest_feature_importances_barplot.svg')
+        plt.xticks(
+            np.arange(len(features)), features, rotation='vertical'
+        )
+        plt.savefig('{}/KBest_feature_importances_barplot.svg'.format(self.results_dir))
         plt.show()
 
         plt.clf()
@@ -136,10 +240,11 @@ class run_ml(def_data):
             x=np.linspace(1, order.shape[0], order.shape[0]),
             y=np.cumsum(model.scores_[order]), marker='o'
         )
-        labels = np.array(features)[order]
-        ax = plt.gca()
-        ax.set(xticks=labels)
-        plt.savefig('KBest_feature_importances_cumulative_plot.svg')
+        labels = np.concatenate((np.array(['']), np.array(features)[order]), axis=0)
+        plt.xticks(
+            np.arange(labels.shape[0]), labels, rotation='vertical'
+        )
+        plt.savefig('{}/KBest_feature_importances_cumulative_plot.svg'.format(self.results_dir))
         plt.show()
 
         score_df = pd.DataFrame({'Feature': features, 'Score': model.scores_})
@@ -147,17 +252,19 @@ class run_ml(def_data):
 
         return score_df
 
-    def select_features(self, feat_retain):
+    def select_features(
+        self, feat_retain, all_features, train_data, test_data, train_x, train_y
+    ):
         """
         features: list of features to retain
         """
 
-        feat_remove = [pep for pep in self.features if not pep in feat_retain]
-        self.sub_train_data = self.train_data.drop(feat_remove, axis=1)
-        self.sub_test_data = self.test_data.drop(feat_remove, axis=1)
-        self.sub_train_x = self.train_data.drop(feat_remove + ['Analyte'], axis=1).to_numpy()
-        self.sub_test_x = self.test_data.drop(feat_remove + ['Analyte'], axis=1).to_numpy()
-        self.sub_features = self.train_data.drop('Analyte', axis=1).columns.tolist()
+        feat_remove = [pep for pep in all_features if not pep in feat_retain]
+        self.sub_train_data = train_data.drop(feat_remove, axis=1)
+        self.sub_test_data = test_data.drop(feat_remove, axis=1)
+        self.sub_train_x = copy.deepcopy(train_data.drop(feat_remove + ['Analyte'], axis=1)).to_numpy()
+        self.sub_test_x = copy.deepcopy(test_data.drop(feat_remove + ['Analyte'], axis=1)).to_numpy()
+        self.sub_features = copy.deepcopy(feat_retain)
 
     def run_pca(self, x_train, features):
         """
@@ -171,15 +278,17 @@ class run_ml(def_data):
         max_num_components = len(features)
 
         plt.clf()
+        ax = plt.gca()
         x_labels = np.linspace(1, max_num_components, max_num_components)
         lineplot = sns.lineplot(
-            x_labels,
-            np.cumsum(model.explained_variance_ratio_),
-            marker='o'
+            x_labels, np.cumsum(model.explained_variance_ratio_), marker='o'
         )
-        ax = plt.gca()
-        ax.set(xticks=x_labels)
-        plt.savefig('PCA_scree_plot.svg')
+        plt.xticks(
+            np.arange(x_labels.shape[0]), x_labels, rotation='vertical'
+        )
+        plt.yticks(rotation='horizontal')
+        ax.set_ylim([0, 1])
+        plt.savefig('{}/PCA_scree_plot.svg'.format(self.results_dir))
         plt.show()
 
     def run_pca_and_transform(self, x_train, x_test, n_components):
@@ -221,11 +330,14 @@ class run_ml(def_data):
         plt.clf()
         x_labels = np.linspace(1, len(rfecv.grid_scores_), len(rfecv.grid_scores_))
         sns.lineplot(x_labels, rfecv.grid_scores_, markers='o')
-        ax = plt.gca()
-        ax.set(xticks=x_labels)
+        plt.xticks(
+            np.arange(len(features)), features, rotation='vertical'
+        )
+        plt.yticks(rotation='horizontal')
         plt.xlabel('Number of features')
         plt.ylabel('Cross validation score')
-        plt.savefig('{}_recursive_feature_elimination_cross_validation_scores.svg'.format(type(model).__name__))
+        plt.savefig('{}/{}_recursive_feature_elimination_cross_validation_'
+                    'scores.svg'.format(self.results_dir, type(model).__name__))
         plt.show()
 
         self.rfecv_train_x = rfecv.transform(x_train)
@@ -275,21 +387,28 @@ class run_ml(def_data):
 
         for param, best_val in best_params.items():
             poss_vals = poss_params[param]
-            if all(isinstance(poss_val, (int, float)) for poss_val in poss_vals) and len(poss_vals) > 2:
-                if best_val in [poss_vals[0], poss_vals[-1]]:
-                    print('Warning: Optimal value selected for {} is at the extreme of the range tested'.format(param))
-                    print('Range tested: {}'.format(poss_vals))
-                    print('Value selected: {}'.format(best_val))
+            if isinstance(poss_vals, (list, np.ndarray)):
+                if (
+                        all(isinstance(poss_val, (int, float)) for poss_val in poss_vals)
+                    and len(poss_vals) > 2
+                ):
+                    if best_val in [poss_vals[0], poss_vals[-1]]:
+                        print('Warning: Optimal value selected for {} is at '
+                              'the extreme of the range tested'.format(param))
+                        print('Range tested: {}'.format(poss_vals))
+                        print('Value selected: {}'.format(best_val))
 
     def run_randomized_search(self, x_train, y_train, train_groups, clf, params):
         """
+        CHANGE SCORING FUNCTION FROM ACCURACY IF NECESSARY
         """
 
         from sklearn.model_selection import RandomizedSearchCV
 
         n_iter = 1
-        for val in list(params.values()):
-            n_iter *= len(val)
+        for val in params.values():
+            if isinstance(val, (list, np.ndarray)):
+                n_iter *= len(val)
         n_iter = int(n_iter*0.2)
         if n_iter < 25:
             n_iter = 25
@@ -311,6 +430,7 @@ class run_ml(def_data):
 
     def run_grid_search(self, x_train, y_train, train_groups, clf, params):
         """
+        CHANGE SCORING FUNCTION FROM ACCURACY IF NECESSARY
         """
 
         from sklearn.model_selection import GridSearchCV
@@ -330,6 +450,7 @@ class run_ml(def_data):
 
     def train_model(self, x_train, y_train, train_groups, clf):
         """
+        CHANGE SCORING FUNCTION FROM ACCURACY IF NECESSARY
         """
 
         from sklearn.model_selection import cross_val_score
@@ -351,71 +472,55 @@ class run_ml(def_data):
         from sklearn.metrics import (
             accuracy_score, recall_score, precision_score, confusion_matrix
         )
+        from sklearn.utils.multiclass import unique_labels
 
         predictions = clf.predict(x_test)
         accuracy = accuracy_score(y_true=y_test, y_pred=predictions)
-        recall = recall_score(y_true=y_test, y_pred=predictions, average='micro')
-        precision = precision_score(y_true=y_test, y_pred=predictions, average='micro')
+        recall = recall_score(y_true=y_test, y_pred=predictions, average='weighted')
+        precision = precision_score(y_true=y_test, y_pred=predictions, average='weighted')
 
         print('Accuracy: {}'.format(accuracy))
         print('Recall: {}'.format(recall))
         print('Precision: {}'.format(precision))
 
+        # Below ensures that predicted and true labels are on the correct axes,
+        # so think carefully before updating!
         plt.clf()
-        labels=list(set(y_test))
+        labels = unique_labels(y_test, predictions)
         sns.heatmap(
             data=confusion_matrix(y_true=y_test, y_pred=predictions, labels=labels),
-            cmap='RdBu_r', annot=True
+            cmap='RdBu_r', annot=True, xticklabels=True, yticklabels=True
         )
         ax = plt.gca()
         ax.set(xticklabels=labels, yticklabels=labels, xlabel='Predicted label',
                ylabel='True label')
-        plt.savefig('{}_confusion_matrix.svg'.format(type(clf).__name__))
+        plt.xticks(rotation='vertical')
+        plt.yticks(rotation='horizontal')
+        plt.savefig('{}/{}_confusion_matrix.svg'.format(self.results_dir, type(clf).__name__))
         plt.show()
 
         return accuracy, recall, precision
 
-    def run_algorithm(self, clf, x_train, y_train, train_groups, x_test, y_test, run, params):
+    def run_algorithm(
+        self, clf, x_train, y_train, train_groups, x_test, y_test, run, params
+    ):
         """
         """
 
         if run == 'randomsearch':
-            search = self.run_randomized_search(x_train, y_train, train_groups, clf, params)
+            search = self.run_randomized_search(
+                x_train, y_train, train_groups, clf, params
+            )
             return search
         elif run == 'gridsearch':
-            search = self.run_grid_search(x_train, y_train, train_groups, clf, params)
+            search = self.run_grid_search(
+                x_train, y_train, train_groups, clf, params
+            )
             return search
         elif run == 'train':
             search = self.train_model(x_train, y_train, train_groups, clf)
             accuracy, recall, precision = self.test_model(x_test, y_test, search)
             return search, accuracy, recall, precision
-
-    def loop_run_algorithm(self):
-        """
-        To be run for training and testing - but need manual input for training...
-        So perhaps use this function to generate the analyte combinations, but then run them manually.
-        Need equal numbers of varieties (sub_group) in each group, e.g. need 10
-        types of green, black and grey tea
-        """
-
-        shuffled_data = []
-        groups = set(train_groups)
-        sub_groups = set(y_train)
-        for group in groups:
-            shuffled_data += [
-                sub_group for sub_group in sub_groups if sub_group.startswith(group)
-            ]
-        shuffled_data = np.array(shuffled_data)
-
-        for n in range(shuffled_data.shape[0]):
-            np.random.shuffle(shuffled_data[n])
-
-        analyte_list = []
-        for n in range(shuffled_data.shape[1]):
-            analytes = shuffled_data.transpose()[n]
-            analyte_list.append(analytes)
-
-        return analyte_list
 
     def run_logistic_regression(
         self, x_train, y_train, train_groups, x_test, y_test, run, params
@@ -438,7 +543,6 @@ class run_ml(def_data):
 
         return search
 
-
     def run_k_nearest_neighbours(
         self, x_train, y_train, train_groups, x_test, y_test, run, params
     ):
@@ -460,7 +564,6 @@ class run_ml(def_data):
         )
 
         return search
-
 
     def run_naive_Bayes(self, x_train, y_train, train_groups, x_test, y_test):
         """
@@ -518,6 +621,11 @@ class run_ml(def_data):
         )
 
         return search
+
+    def loop_run_algorithm(self):
+        """
+        Loops running
+        """
 
     """
     Possible metrics include accuracy (= (TP + TN) / (TP + TN + FN + FP), good for when cost of false positive and false negative are equally high) (can use balanced accuracy score if the classes are not of equal size / weight), Matthews correlation coefficient (can
