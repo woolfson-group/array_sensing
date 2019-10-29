@@ -1,4 +1,5 @@
 
+jinja2
 numpy
 matplotlib
 pandas
