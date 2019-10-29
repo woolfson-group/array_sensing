@@ -278,16 +278,14 @@ class run_ml(def_data):
         max_num_components = len(features)
 
         plt.clf()
-        ax = plt.gca()
         x_labels = np.linspace(1, max_num_components, max_num_components)
         lineplot = sns.lineplot(
             x_labels, np.cumsum(model.explained_variance_ratio_), marker='o'
         )
         plt.xticks(
-            np.arange(x_labels.shape[0]), x_labels, rotation='vertical'
+            np.arange(1, x_labels.shape[0]+1), x_labels, rotation='vertical'
         )
         plt.yticks(rotation='horizontal')
-        ax.set_ylim([0, 1])
         plt.savefig('{}/PCA_scree_plot.svg'.format(self.results_dir))
         plt.show()
 

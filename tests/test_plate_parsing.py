@@ -1,11 +1,7 @@
 
-import numpy as np
-import pytest
+import unittest
 
-from array_sensing.parse_array_data import parse_array_data
-from array_sensing.train import run_ml
-
-class TestClass():
+class TestClass(unittest.TestCase):
 
     def test_plate_parsing(self):
         """
@@ -14,7 +10,10 @@ class TestClass():
         import random
         import shutil
         import string
+        import numpy as np
         import pandas as pd
+        from array_sensing.parse_array_data import parse_array_data
+        from array_sensing.train import run_ml
 
         dir_path = 'tests/Test_plates/'
         repeats = ['repeat_1']

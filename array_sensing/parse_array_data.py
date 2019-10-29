@@ -19,6 +19,35 @@ else:
         PlateLayoutError, FluorescenceSaturationError
     )
 
+
+def trim_dataframe(label_df):
+    """
+    """
+    row_index = ''
+    for index in range(label_df.shape[0]):
+        row_set = set(label_df.iloc[index])
+        if all(isinstance(x, (int, float)) for x in row_set):
+            if all(np.isnan(list(row_set)[int(x)]) for x in range(len(row_set))):
+                row_index = index
+                break
+    if row_index == '':
+        row_index = label_df.shape[0]
+
+    col_index = ''
+    for index, col in enumerate(label_df.columns):
+        col_set = set(label_df[col].tolist()[0:row_index])
+        if all(isinstance(x, (int, float)) for x in col_set):
+            if all(np.isnan(list(col_set)[int(x)]) for x in range(len(col_set))):
+                col_index = index
+                break
+    if col_index == '':
+        col_index = label_df.shape[1]
+
+    label_df = label_df.iloc[:row_index, :col_index].reset_index(drop=True)
+
+    return label_df
+
+
 def parse_xlsx_to_dataframe(plate_path, peptide_list, gain):
     """
     Converts an excel xlsx file output from the plate reader into a pandas
@@ -63,32 +92,14 @@ def parse_xlsx_to_dataframe(plate_path, peptide_list, gain):
     protocol_df = pd.read_excel(
         plate_path, sheet_name='Protocol Information', index_col=0
     )
-    start_row = protocol_df.index.tolist().index('Plate layout')
+    protocol_df_index = [str(x).lower() for x in protocol_df.index.tolist()]
+    start_row = protocol_df_index.index('plate layout')
     label_df = pd.read_excel(
         plate_path, sheet_name='Protocol Information', skiprows=start_row+2,
         index_col=0
     )
-    row_index = ''
-    for index in range(label_df.shape[0]):
-        row_set = set(label_df.iloc[index])
-        if all(isinstance(x, (int, float)) for x in row_set):
-            if all(np.isnan(list(row_set)[int(x)]) for x in range(len(row_set))):
-                row_index = index
-                break
-    if row_index == '':
-        row_index = label_df.shape[0]
-    col_index = ''
-    for index, col in enumerate(label_df.columns):
-        col_set = set(label_df[col].tolist()[0:row_index])
-        if all(isinstance(x, (int, float)) for x in col_set):
-            if all(np.isnan(list(col_set)[int(x)]) for x in range(len(col_set))):
-                col_index = index
-                break
-    if col_index == '':
-        col_index = label_df.shape[1]
 
-    label_df = label_df.iloc[:row_index, :col_index].reset_index(drop=True)
-
+    label_df = trim_dataframe(label_df)
     label_df = label_df.replace(
         to_replace='[bB][lL][aA][nN][kK]', value='blank', regex=True
     )
@@ -98,30 +109,12 @@ def parse_xlsx_to_dataframe(plate_path, peptide_list, gain):
 
     # Reads peptide layout and names from metadata in "Protocol Information"
     # sheet
-    start_row = protocol_df.index.tolist().index('Peptide layout')
+    start_row = protocol_df_index.index('peptide layout')
     peptide_arrang = pd.read_excel(
         plate_path, sheet_name='Protocol Information', skiprows=start_row+1,
         index_col=None
     )
-    row_index = ''
-    for index in range(peptide_arrang.shape[0]):
-        row_set = set(peptide_arrang.iloc[index])
-        if all(isinstance(x, (int, float)) for x in row_set):
-            if all(np.isnan(list(row_set)[int(x)]) for x in range(len(row_set))):
-                row_index = index
-                break
-    if row_index == '':
-        row_index = peptide_arrang.shape[0]
-    col_index = ''
-    for index, col in enumerate(peptide_arrang.columns):
-        col_set = set(peptide_arrang[col].tolist()[0:row_index])
-        if all(isinstance(x, (int, float)) for x in col_set):
-            if all(np.isnan(list(col_set)[int(x)]) for x in range(len(col_set))):
-                col_index = index
-                break
-    if col_index == '':
-        col_index = peptide_arrang.shape[1]
-    peptide_arrang = peptide_arrang.iloc[:row_index, :col_index].reset_index(drop=True)
+    peptide_arrang = trim_dataframe(peptide_arrang)
 
     r_dim = peptide_arrang.shape[0]
     c_dim = peptide_arrang.shape[1]
@@ -438,11 +431,12 @@ class def_data():
             remove = ''
             while not isinstance(remove, bool):
                 remove = input('Overwrite {}?'.format(results_dir))
-                if remove.strip().lower() == 'true':
+                if remove.strip().lower() in ['true', 'yes', 'y']:
                     remove = True
-                elif remove.strip().lower() == 'false':
+                elif remove.strip().lower() in ['false', 'no', 'n']:
                     remove = False
                 else:
+                    print('Input not recognised - please specify "yes" or "no"')
                     remove = ''
             if remove is True:
                 shutil.rmtree(results_dir)
