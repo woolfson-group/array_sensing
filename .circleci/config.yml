@@ -5,5 +5,4 @@ jobs:
       - image: python:3.6
     steps:
       - checkout
-      - run: pip install pytest
-      - run: pytest
+      - run: python -m unitttest tests.test_plate_parsing
