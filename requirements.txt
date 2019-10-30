@@ -3,7 +3,7 @@ jinja2
 numpy
 matplotlib
 pandas
-seaborn
 scikit-learn
 scipy
+seaborn
 xlrd

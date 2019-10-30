@@ -395,7 +395,7 @@ def scale_min_max(
     return scaled_plate, raw_plate_data, plate_outliers
 
 
-class def_data():
+class DefData():
 
     def __init__(self, dir_path, repeat_names, peptide_list, results_dir):
         """
@@ -444,7 +444,7 @@ class def_data():
         self.results_dir = results_dir.rstrip('/')
 
 
-class parse_array_data(def_data):
+class ParseArrayData(DefData):
 
 
     def __init__(
@@ -467,7 +467,7 @@ class parse_array_data(def_data):
         - max_fluor: Maximum fluorescence reading that can be measured by the
         plate reader, default is 260,000
         """
-        def_data.__init__(self, dir_path, repeat_names, peptide_list, results_dir)
+        DefData.__init__(self, dir_path, repeat_names, peptide_list, results_dir)
 
         self.gain = gain
         self.min_fluor = min_fluor

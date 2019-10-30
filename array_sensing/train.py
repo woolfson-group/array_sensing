@@ -11,12 +11,12 @@ import seaborn as sns
 sns.set()
 
 if __name__ == 'array_sensing.train':
-    from array_sensing.parse_array_data import def_data
+    from array_sensing.parse_array_data import DefData
 else:
-    from sensing_array_paper.array_sensing.parse_array_data import def_data
+    from sensing_array_paper.array_sensing.parse_array_data import DefData
 
 
-class run_ml(def_data):
+class RunML(DefData):
 
     def __init__(
         self, dir_path, repeat_names, peptide_list, results_dir, data,
@@ -34,7 +34,7 @@ class run_ml(def_data):
         - data: Dataframe of (standardised) fluorescence readings (output from
         parse_array_data class)
         """
-        def_data.__init__(self, dir_path, repeat_names, peptide_list, results_dir)
+        DefData.__init__(self, dir_path, repeat_names, peptide_list, results_dir)
         self.data = data
 
         self.classes = classes
