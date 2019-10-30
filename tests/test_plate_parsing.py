@@ -12,8 +12,7 @@ class TestClass(unittest.TestCase):
         import string
         import numpy as np
         import pandas as pd
-        from array_sensing.parse_array_data import parse_array_data
-        from array_sensing.train import run_ml
+        from array_sensing.parse_array_data import ParseArrayData
 
         dir_path = 'tests/Test_plates/'
         repeats = ['repeat_1']
@@ -28,7 +27,7 @@ class TestClass(unittest.TestCase):
                          if not peptide in ['No Pep', 'GRP35']]
 
         # Parsed data
-        fluor_data = parse_array_data(
+        fluor_data = ParseArrayData(
             dir_path, repeats, peptides, results_dir, control_peptides
         )
         fluor_data.group_xlsx_repeats()
