@@ -91,7 +91,7 @@ def parse_xlsx_to_dataframe(plate_path, peptide_list, gain):
 
     # Reads class labels from metadata in "Protocol Information" sheet
     protocol_df = pd.read_excel(
-        plate_path, sheet_name='Protocol Information', index_col=0
+        plate_path, sheet_name='Protocol Information', skiprows=0, index_col=0
     )
     protocol_df_index = [str(x).lower() for x in protocol_df.index.tolist()]
     start_row = protocol_df_index.index('plate layout')
@@ -388,17 +388,17 @@ def scale_min_max(
                     else:
                         scaled_val = np.nan
                         if max_fluor == min_fluor:
-                            print('Warning - min and max fluorescence readings '
-                                  'for analyte {} peptide {} on plate {} are '
-                                  'the same'.format(analyte, column,
-                                  fluor_data['Plate'][index_r]))
+                            print('\x1b[31m WARNING - min and max fluorescence '
+                                  'readings for analyte {} peptide {} on plate '
+                                  '{} are the same \033[0m'.format(analyte,
+                                  column, fluor_data['Plate'][index_r]))
                         elif max_fluor < min_fluor:
                             if max_fluor == min_fluor:
-                                print('Warning - median max. fluorescence reading '
-                                      'for analyte {} peptide {} on plate {} is '
-                                      'larger than the corresponding median min. '
-                                      'fluorescene reading'.format(analyte,
-                                      column, fluor_data['Plate'][index_r]))
+                                print('\x1b[31m WARNING - median max. fluorescence'
+                                      ' reading for analyte {} peptide {} on plate '
+                                      '{} is larger than the corresponding median '
+                                      'min. fluorescene reading \033[0m'.format(
+                                      analyte, column, fluor_data['Plate'][index_r]))
                     fluor_data.iloc[index_r, index_c] = scaled_val
 
         drop_columns = []
@@ -465,7 +465,8 @@ class ParseArrayData(DefData):
 
     def __init__(
         self, dir_path, repeat_names, peptide_list, results_dir,
-        control_peptides, gain=1, min_fluor=0, max_fluor=260000
+        control_peptides, control_analytes, gain=1, min_fluor=0,
+        max_fluor=260000
     ):
         """
         - dir_path: Path (either absolute or relative) to directory containing
@@ -498,6 +499,8 @@ class ParseArrayData(DefData):
                     [peptide for peptide in missing_peptides]
                 )
             )
+
+        self.control_analytes = control_analytes
 
     def group_xlsx_repeats(self):
         """
@@ -568,6 +571,39 @@ class ParseArrayData(DefData):
                 ' for this barrel with readings collected at a different gain, '
                 'for ALL xlsx files in the dataset.'.format(saturated_readings))
 
+        # Checks that there is data for the same set of analytes in each repeat
+        count = 0
+        analytes = []
+        for repeat in scaled_data.keys():
+            count += 1
+            repeat_analytes = [analyte for plate in scaled_data[repeat]
+                               for analyte in plate.keys()]
+            if count == 1:
+                repeat_1 = repeat
+                analytes = [analyte for analyte in repeat_analytes]
+            else:
+                diff_analytes = set(repeat_analytes).symmetric_difference(analytes)
+                if diff_analytes != set():
+                    print('\x1b[31m WARNING: The analytes tested in different '
+                          'repeats are not the same. Analytes {}  are not '
+                          'consistent between {} and {} \033[0m'.format(
+                          diff_analytes, repeat_1, repeat))
+
+        # Removes analytes the user has specified to ignore in the analysis
+        for analyte in self.control_analytes:
+            for repeat_n in scaled_data.keys():
+                amalg_analytes = []
+                plates = copy.deepcopy(scaled_data[repeat_n])
+                for index, plate in enumerate(plates):
+                    amalg_analytes += [x for x in plate.keys()
+                                       if not x in amalg_analytes]
+                    if analyte in plate.keys():
+                        del scaled_data[repeat_n][index][analyte]
+                if not analyte in amalg_analytes:
+                    print('\x1b[31m WARNING: Whlist removing analytes specified'
+                          ' by the user to ignore, analyte {} is not recognised'
+                          ' in repeat {}'.format(analyte, repeat_n))
+
         self.plates = raw_plate_data
         self.same_plate_outliers = raw_plate_data_highlighted
         self.scaled_data = scaled_data
@@ -615,10 +651,11 @@ class ParseArrayData(DefData):
         if True in pd.isnull(copy.deepcopy(ml_fluor_df)).values:
             dropped_rows = [n for n in range(ml_fluor_df.shape[0])
                             if not n in ml_fluor_df.dropna(axis=0).index]
-            print('Warning: readings dropped because they contain NaN values '
-                  'after data processing.\nCheck plates listed in previous '
-                  'warnings to make sure that all readings are present and '
-                  'that min and max fluorescence readings aren\'t identical')
+            print('\x1b[31m WARNING: readings dropped because they contain NaN '
+                  'values after data processing.\nCheck plates listed in '
+                  'previous warnings to make sure that all readings are '
+                  'present and that min and max fluorescence readings aren\'t '
+                  'identical \033[0m')
             ml_fluor_df = ml_fluor_df.dropna(axis=0).reset_index(drop=True)  # Must be after calculation of dropped_rows!
             labels = [label for index, label in enumerate(labels)
                       if not index in dropped_rows]

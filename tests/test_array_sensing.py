@@ -21,12 +21,13 @@ def plate_parsing(dir_path, rows_skip):
         string.ascii_uppercase + string.ascii_lowercase + string.digits
     ) for n in range(6))
     control_peptides = ['GRP35']
+    control_analytes = []
     test_peptides = [peptide for peptide in peptides
                      if not peptide in ['No Pep', 'GRP35']]
 
     # Parsed data
     fluor_data = ParseArrayData(
-        dir_path, repeats, peptides, results_dir, control_peptides
+        dir_path, repeats, peptides, results_dir, control_peptides, control_analytes
     )
     fluor_data.group_xlsx_repeats()
     fluor_data.xlsx_to_scaled_df('No Pep')
