@@ -6,6 +6,7 @@
 import copy
 import os
 import shutil
+import sys
 import numpy as np
 import pandas as pd
 from sklearn import preprocessing
@@ -263,60 +264,59 @@ def calc_median_and_remove_outliers(
         if set(pd.isnull(plate_df[feature])) == {True}:
             continue
 
+        feature_array = copy.deepcopy(plate_df[feature]).to_numpy()
+        n = feature_array.shape[0]
+        if n < 15:
+            k_max = 1
+        elif 15 <= n < 25:
+            k_max = 2
         else:
-            feature_array = copy.deepcopy(plate_df[feature]).to_numpy()
-            n = feature_array.shape[0]
-            if n < 15:
-                k_max = 1
-            elif 15 <= n < 25:
-                k_max = 2
-            else:
-                k_max = math.floor(n / 2)
+            k_max = math.floor(n / 2)
 
-            k = 0
-            while k < k_max:
-                # Calculation of Grubbs test threshold value
-                t = stats.t.ppf((1 - (alpha / (2*(n-k)))), (n-k-2))
-                numerator = (n-k-1) * t
-                denominator = np.sqrt(n-k) * np.sqrt((n-k-2)+np.square(t))
-                g_critical = numerator / denominator
+        k = 0
+        while k < k_max:
+            # Calculation of Grubbs test threshold value
+            t = stats.t.ppf((1 - (alpha / (2*(n-k)))), (n-k-2))
+            numerator = (n-k-1) * t
+            denominator = np.sqrt(n-k) * np.sqrt((n-k-2)+np.square(t))
+            g_critical = numerator / denominator
 
-                # Calculation of Grubbs test statistic
-                abs_diff = np.abs(feature_array - np.nanmean(feature_array))
-                max_val = np.nanmax(abs_diff, axis=0)
-                max_index = np.nanargmax(abs_diff, axis=0)
-                g_calculated = max_val / np.nanstd(feature_array, ddof=1)  # Uses sample standard deviation as required by test
+            # Calculation of Grubbs test statistic
+            abs_diff = np.abs(feature_array - np.nanmean(feature_array))
+            max_val = np.nanmax(abs_diff, axis=0)
+            max_index = np.nanargmax(abs_diff, axis=0)
+            g_calculated = max_val / np.nanstd(feature_array, ddof=1)  # Uses sample standard deviation as required by test
 
-                if g_calculated > g_critical:
-                    feature_array[max_index] = np.nan
-                    k += 1
+            if g_calculated > g_critical:
+                feature_array[max_index] = np.nan
+                k += 1
 
-                    plate_name = plate_df['Plate'][max_index]
-                    analyte = plate_df['Analyte'][max_index]
-                    raw_data_loc = plate_df['{}_loc'.format(feature)][max_index]
-                    r = raw_data_loc[0]
-                    c = raw_plate_data[plate_name].columns.tolist()[raw_data_loc[1]]
+                plate_name = plate_df['Plate'][max_index]
+                analyte = plate_df['Analyte'][max_index]
+                raw_data_loc = plate_df['{}_loc'.format(feature)][max_index]
+                r = raw_data_loc[0]
+                c = raw_plate_data[plate_name].columns.tolist()[raw_data_loc[1]]
 
-                    if not plate_name in list(plate_outliers.keys()):
-                        plate_outliers[plate_name] = {}
-                    plate_outliers[plate_name]['{}_{}_{}_{}'.format(
-                        analyte, feature, raw_data_loc[0], raw_data_loc[1]
-                    )] = max_val
+                if not plate_name in list(plate_outliers.keys()):
+                    plate_outliers[plate_name] = {}
+                plate_outliers[plate_name]['{}_{}_{}_{}'.format(
+                    analyte, feature, raw_data_loc[0], raw_data_loc[1]
+                )] = max_val
 
-                    if stage == 1:
-                        raw_plate_data[plate_name].applymap(
-                            color_val_red, subset=pd.IndexSlice[r, [c]]
-                        )
-                    elif stage == 2:
-                        raw_plate_data[plate_name].applymap(
-                            highlight_yellow, subset=pd.IndexSlice[r, [c]]
-                        )
-                    else:
-                        raise ValueError('Inappropriate value provided for '
-                                         'stage variable - should be set equal '
-                                         'to 1 or 2')
+                if stage == 1:
+                    raw_plate_data[plate_name].applymap(
+                        color_val_red, subset=pd.IndexSlice[r, [c]]
+                    )
+                elif stage == 2:
+                    raw_plate_data[plate_name].applymap(
+                        highlight_yellow, subset=pd.IndexSlice[r, [c]]
+                    )
                 else:
-                    break
+                    raise ValueError('Inappropriate value provided for '
+                                     'stage variable - should be set equal '
+                                     'to 1 or 2')
+            else:
+                break
 
     median_df = plate_df.drop(drop_columns, axis=1)
     median_df = median_df.median().to_frame().transpose()
@@ -325,7 +325,7 @@ def calc_median_and_remove_outliers(
 
 
 def scale_min_max(
-    plate, no_pep, cols_ignore, raw_plate_data, plate_outliers
+    plate, no_pep, plate_name, cols_ignore, raw_plate_data, plate_outliers
 ):
     """
     Scales data on plate between min fluorescence reading (analyte + no peptide
@@ -351,6 +351,10 @@ def scale_min_max(
     blank_data, plate_orig_data, plate_outliers = calc_median_and_remove_outliers(
         blank_data, raw_plate_data, plate_outliers, stage=1
     )
+    if any(np.isnan(x) for x in blank_data.values.flatten()):
+        nan_peptides = [col for col in blank_data.columns if np.isnan(blank_data[col][0])]
+        sys.exit('ERROR: Median flourescence reading in the absence of analyte on '
+                 'plate {} is NaN for barrels {}'.format(plate_name, nan_peptides))
 
     scaled_plate = {}
     analytes = [analyte for analyte in list(plate.keys()) if analyte != 'blank']
@@ -363,6 +367,10 @@ def scale_min_max(
             raw_plate_data, plate_outliers, stage=1
         )
         min_fluor = min_fluor[no_pep][0]
+        if np.isnan(min_fluor):
+            sys.exit('ERROR: Median flourescence reading for no peptide on plate '
+                     '{} is NaN for analyte {}'.format(plate_name, analyte))
+
         fluor_data = fluor_data.drop([no_pep, '{}_loc'.format(no_pep)], axis=1)
 
         for index_c, column in enumerate(list(fluor_data.columns)):
@@ -375,14 +383,22 @@ def scale_min_max(
                 max_fluor = blank_data[column][0]
 
                 for index_r, val in enumerate(fluor_data[column].tolist()):
-                    if (max_fluor - min_fluor) != 0:
+                    if (max_fluor - min_fluor) > 0:
                         scaled_val = (val-min_fluor) / (max_fluor-min_fluor)
                     else:
                         scaled_val = np.nan
-                        print('Warning - min and max fluor readings for analyte '
-                              '{} peptide {} on plate {} are the same'.format(
-                                  analyte, column, fluor_data['Plate'][index_r]
-                            ))
+                        if max_fluor == min_fluor:
+                            print('Warning - min and max fluorescence readings '
+                                  'for analyte {} peptide {} on plate {} are '
+                                  'the same'.format(analyte, column,
+                                  fluor_data['Plate'][index_r]))
+                        elif max_fluor < min_fluor:
+                            if max_fluor == min_fluor:
+                                print('Warning - median max. fluorescence reading '
+                                      'for analyte {} peptide {} on plate {} is '
+                                      'larger than the corresponding median min. '
+                                      'fluorescene reading'.format(analyte,
+                                      column, fluor_data['Plate'][index_r]))
                     fluor_data.iloc[index_r, index_c] = scaled_val
 
         drop_columns = []
@@ -535,7 +551,7 @@ class ParseArrayData(DefData):
                     self.min_fluor, self.max_fluor
                 )
                 scaled_plate, raw_plate_data_highlighted, outliers = scale_min_max(
-                    plate, no_pep, self.control_peptides,
+                    plate, no_pep, plate_path, self.control_peptides,
                     raw_plate_data_highlighted, outliers
                 )
                 scaled_data[repeat].append(scaled_plate)
