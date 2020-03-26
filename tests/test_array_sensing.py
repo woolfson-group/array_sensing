@@ -11,7 +11,7 @@ def plate_parsing(dir_path, rows_skip):
     import string
     import numpy as np
     import pandas as pd
-    from array_sensing.parse_array_data import ParseArrayData
+    from sensing_array_paper_2019.array_sensing.parse_array_data import ParseArrayData
 
     repeats = ['repeat_1']
     peptides = ['No Pep', 'GRP22', 'GRP35', 'GRP46', 'GRP51', 'GRP52',

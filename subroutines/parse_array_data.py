@@ -6,18 +6,19 @@
 import copy
 import os
 import shutil
-import sys
 import numpy as np
 import pandas as pd
 from sklearn import preprocessing
 
 if __name__ == 'array_sensing.parse_array_data':
     from array_sensing.exceptions import (
-        PlateLayoutError, FluorescenceSaturationError
+        PlateLayoutError, FluorescenceSaturationError, NaNFluorescenceError,
+        MinMaxFluorescenceError
     )
 else:
     from sensing_array_paper.array_sensing.exceptions import (
-        PlateLayoutError, FluorescenceSaturationError
+        PlateLayoutError, FluorescenceSaturationError, NaNFluorescenceError,
+        MinMaxFluorescenceError
     )
 
 
@@ -91,13 +92,13 @@ def parse_xlsx_to_dataframe(plate_path, peptide_list, gain):
 
     # Reads class labels from metadata in "Protocol Information" sheet
     protocol_df = pd.read_excel(
-        plate_path, sheet_name='Protocol Information', skiprows=0, index_col=0
+        plate_path, sheet_name='Protocol Information', header=None, index_col=0
     )
     protocol_df_index = [str(x).lower() for x in protocol_df.index.tolist()]
     start_row = protocol_df_index.index('plate layout')
     label_df = pd.read_excel(
-        plate_path, sheet_name='Protocol Information', skiprows=start_row+2,
-        index_col=0
+        plate_path, sheet_name='Protocol Information', header=None,
+        skiprows=start_row+2, index_col=0
     )
 
     label_df = trim_dataframe(label_df)
@@ -112,8 +113,8 @@ def parse_xlsx_to_dataframe(plate_path, peptide_list, gain):
     # sheet
     start_row = protocol_df_index.index('peptide layout')
     peptide_arrang = pd.read_excel(
-        plate_path, sheet_name='Protocol Information', skiprows=start_row+1,
-        index_col=None
+        plate_path, sheet_name='Protocol Information', header=None,
+        skiprows=start_row+1, index_col=None
     )
     peptide_arrang = trim_dataframe(peptide_arrang)
 
@@ -137,8 +138,7 @@ def parse_xlsx_to_dataframe(plate_path, peptide_list, gain):
             )
         )
 
-    # Combines fluorescence data collected for the same analyte into a
-    # dataframe
+    # Combines fluorescence data collected for the same analyte into a dataframe
     grouped_fluor_data = {}
 
     for analyte in label_set:
@@ -328,9 +328,9 @@ def scale_min_max(
     plate, no_pep, plate_name, cols_ignore, raw_plate_data, plate_outliers
 ):
     """
-    Scales data on plate between min fluorescence reading (analyte + no peptide
-    + DPH) and max fluorescence reading (= blank readings, i.e. no analyte +
-    peptide + DPH)
+    Scales data on plate between min fluorescence reading (no analyte +
+    no peptide + DPH) and max fluorescence reading (= blank readings, i.e.
+    no analyte + peptide + DPH)
 
     Input
     ----------
@@ -353,25 +353,33 @@ def scale_min_max(
     )
     if any(np.isnan(x) for x in blank_data.values.flatten()):
         nan_peptides = [col for col in blank_data.columns if np.isnan(blank_data[col][0])]
-        sys.exit('ERROR: Median flourescence reading in the absence of analyte on '
-                 'plate {} is NaN for barrels {}'.format(plate_name, nan_peptides))
+        raise NaNFluorescenceError(
+            'ERROR: Median fluorescence reading in the absence of analyte on '
+            'plate {} is NaN for barrels {}'.format(plate_name, nan_peptides)
+        )
 
     scaled_plate = {}
     analytes = [analyte for analyte in list(plate.keys()) if analyte != 'blank']
     for analyte in analytes:
         fluor_data = copy.deepcopy(plate[analyte])
 
-        # Calculates minimum fluorescence reading for the analyte
-        min_fluor, raw_plate_data, plate_outliers = calc_median_and_remove_outliers(
-            fluor_data[['Plate', 'Analyte', no_pep, '{}_loc'.format(no_pep)]],
-            raw_plate_data, plate_outliers, stage=1
+        # Checks that analyte + DPH fluorescence is lower than all analyte + DPH
+        # + peptide combinations (except for peptides in cols_ignore)
+        median_fluor_data, raw_plate_data, plate_outliers = calc_median_and_remove_outliers(
+            fluor_data, raw_plate_data, plate_outliers, stage=1
         )
-        min_fluor = min_fluor[no_pep][0]
-        if np.isnan(min_fluor):
-            sys.exit('ERROR: Median flourescence reading for no peptide on plate '
-                     '{} is NaN for analyte {}'.format(plate_name, analyte))
 
-        fluor_data = fluor_data.drop([no_pep, '{}_loc'.format(no_pep)], axis=1)
+        min_fluor_analyte = median_fluor_data[no_pep][0]
+        for peptide in list(median_fluor_data.columns):
+            if peptide != no_pep and not peptide in cols_ignore:
+                fluor_analyte_pep = median_fluor_data[peptide][0]
+                if fluor_analyte_pep > min_fluor_analyte:
+                    continue
+                else:
+                    print('\x1b[31m WARNING - fluorescence of ({} + {} + DPH) '
+                          'is less than fluorescence of ({} + DPH) alone. '
+                          'Analysis will continue but please CHECK YOUR DATA. '
+                          '\033[0m'.format(analyte, peptide, analyte))
 
         for index_c, column in enumerate(list(fluor_data.columns)):
             if (
@@ -381,27 +389,31 @@ def scale_min_max(
             ):
                 # Applies min max scaling to each reading
                 max_fluor = blank_data[column][0]
+                min_fluor = blank_data[no_pep][0]
 
                 for index_r, val in enumerate(fluor_data[column].tolist()):
-                    if (max_fluor - min_fluor) > 0:
+                    if (max_fluor-min_fluor) > 0:
                         scaled_val = (val-min_fluor) / (max_fluor-min_fluor)
                     else:
                         scaled_val = np.nan
                         if max_fluor == min_fluor:
-                            print('\x1b[31m WARNING - min and max fluorescence '
-                                  'readings for analyte {} peptide {} on plate '
-                                  '{} are the same \033[0m'.format(analyte,
-                                  column, fluor_data['Plate'][index_r]))
+                            raise MinMaxFluorescenceError(
+                                '\x1b[31m WARNING - min and max fluorescence '
+                                'readings for peptide {} on plate {} are the '
+                                'same \033[0m'.format(
+                                column, fluor_data['Plate'][index_r])
+                            )
                         elif max_fluor < min_fluor:
-                            if max_fluor == min_fluor:
-                                print('\x1b[31m WARNING - median max. fluorescence'
-                                      ' reading for analyte {} peptide {} on plate '
-                                      '{} is larger than the corresponding median '
-                                      'min. fluorescene reading \033[0m'.format(
-                                      analyte, column, fluor_data['Plate'][index_r]))
+                            raise MinMaxFluorescenceError(
+                                '\x1b[31m WARNING - median max. fluorescence'
+                                ' reading for peptide {} on plate {} is '
+                                'smaller than the corresponding median min. '
+                                'fluorescence reading \033[0m'.format(
+                                column, fluor_data['Plate'][index_r])
+                            )
                     fluor_data.iloc[index_r, index_c] = scaled_val
 
-        drop_columns = []
+        drop_columns = [no_pep, '{}_loc'.format(no_pep)]
         for column in cols_ignore:
             drop_columns += [column, '{}_loc'.format(column)]
         fluor_data = fluor_data.drop(drop_columns, axis=1)
@@ -413,24 +425,16 @@ def scale_min_max(
 
 class DefData():
 
-    def __init__(self, dir_path, repeat_names, peptide_list, results_dir):
+    def __init__(self, peptide_list, results_dir):
         """
-        - dir_path: Path (either absolute or relative) to directory containing
-        xlsx files of fluorescence readings
-        - repeat_names: Names used to label different repeat readings of the
-        same analytes in the xlsx file names. **NOTE: the same repeat name
-        should be used for all analytes in the same repeat (hence date is
-        probably not the best label unless all analytes in the repeat run were
-        measured on the same day)**.
         - peptide_list: List of barrel names
+        - results_dir: Path (either absolute or relative) to directory where
+        output files should be saved. This directory will be created by the
+        program and so should not already exist.
         """
 
-        self.dir_path = dir_path
-        self.repeats = repeat_names
         self.peptides = peptide_list
 
-        if not os.path.isdir(self.dir_path):
-            raise FileNotFoundError('Path to working directory not recognised')
         if len(self.peptides) != len(set(self.peptides)):
             multi_peptides = []
             for peptide in self.peptides:
@@ -462,7 +466,6 @@ class DefData():
 
 class ParseArrayData(DefData):
 
-
     def __init__(
         self, dir_path, repeat_names, peptide_list, results_dir,
         control_peptides, control_analytes, gain=1, min_fluor=0,
@@ -477,6 +480,15 @@ class ParseArrayData(DefData):
         probably not the best label unless all analytes in the repeat run were
         measured on the same day)**.
         - peptide_list: List of barrel names
+        - results_dir: Path (either absolute or relative) to directory where
+        output files should be saved. This directory will be created by the
+        program and so should not already exist.
+        - control_peptides: List of peptides (not including "No Peptide") to be
+        excluded from the analysis. E.g. Typically we exclude the collapsed
+        barrel control (it is only included to check that the fluorescence
+        readings collected from the plate look reasonable), hence
+        control_peptides=['GRP35']
+        - control_analytes: List of analytes to be excluded from the analysis.
         - gain: Which dataframe of fluorescence data (collected at different
         gains) to use, default is first listed in xlsx file
         - min_fluor: Minimum fluorescence reading that can be measured by the
@@ -484,7 +496,13 @@ class ParseArrayData(DefData):
         - max_fluor: Maximum fluorescence reading that can be measured by the
         plate reader, default is 260,000
         """
-        DefData.__init__(self, dir_path, repeat_names, peptide_list, results_dir)
+
+        DefData.__init__(self, peptide_list, results_dir)
+
+        self.dir_path = dir_path
+        self.repeats = repeat_names
+        if not os.path.isdir(self.dir_path):
+            raise FileNotFoundError('Path to working directory not recognised')
 
         self.gain = gain
         self.min_fluor = min_fluor
@@ -495,7 +513,7 @@ class ParseArrayData(DefData):
                             if not peptide in self.peptides]
         if len(missing_peptides) >= 1:
             raise NameError(
-                'Peptides {} are not included in list of all peptides'.format(
+                'Peptide(s) {} are not included in list of all peptides'.format(
                     [peptide for peptide in missing_peptides]
                 )
             )
@@ -590,26 +608,34 @@ class ParseArrayData(DefData):
                           diff_analytes, repeat_1, repeat))
 
         # Removes analytes the user has specified to ignore in the analysis
+        all_analytes = []
         for analyte in self.control_analytes:
-            for repeat_n in scaled_data.keys():
+            for repeat in scaled_data.keys():
                 amalg_analytes = []
-                plates = copy.deepcopy(scaled_data[repeat_n])
+                plates = copy.deepcopy(scaled_data[repeat])
                 for index, plate in enumerate(plates):
                     amalg_analytes += [x for x in plate.keys()
                                        if not x in amalg_analytes]
+                    all_analytes += amalg_analytes
                     if analyte in plate.keys():
-                        del scaled_data[repeat_n][index][analyte]
+                        del scaled_data[repeat][index][analyte]
                 if not analyte in amalg_analytes:
-                    print('\x1b[31m WARNING: Whlist removing analytes specified'
+                    print('\x1b[31m WARNING: Whilst removing analytes specified'
                           ' by the user to ignore, analyte {} is not recognised'
-                          ' in repeat {}'.format(analyte, repeat_n))
+                          ' in repeat {}'.format(analyte, repeat))
 
+        # Display dataframe with added formatting in jupyter notebook via:
+        # from IPython.display import display
+        # for plate in fluor_data.same_plate_outliers.keys():
+        #     display(ffluor_data.same_plate_outliers[plate])
         self.plates = raw_plate_data
         self.same_plate_outliers = raw_plate_data_highlighted
         self.scaled_data = scaled_data
         features = [no_pep] + self.control_peptides
         self.features = [feature for feature in self.peptides if not
                          feature in features]
+        self.analytes = [x for x in set(all_analytes)
+                         if not x in self.control_analytes]
 
         with open('{}/Outliers_same_plate.txt'.format(self.results_dir), 'w') as f:
             f.write('Outliers on same plate identified by generalised ESD test:\n')
@@ -649,8 +675,11 @@ class ParseArrayData(DefData):
 
         ml_fluor_df = pd.concat(ml_fluor_data, axis=0).reset_index(drop=True)
         if True in pd.isnull(copy.deepcopy(ml_fluor_df)).values:
+            print(ml_fluor_df)
+            print(pd.isnull(copy.deepcopy(ml_fluor_df)).values)
             dropped_rows = [n for n in range(ml_fluor_df.shape[0])
                             if not n in ml_fluor_df.dropna(axis=0).index]
+            print(dropped_rows)
             print('\x1b[31m WARNING: readings dropped because they contain NaN '
                   'values after data processing.\nCheck plates listed in '
                   'previous warnings to make sure that all readings are '
@@ -669,24 +698,3 @@ class ParseArrayData(DefData):
             for plate in list(outliers.keys()):
                 for loc, outlier in outliers[plate].items():
                     f.write('{}: {} {}\n'.format(plate, loc, outlier))
-
-    def standardise_readings(self):
-        """
-        Standardises fluorescence data across features (i.e. the peptides)
-        """
-
-        columns = self.ml_fluor_data.columns
-        analyte_labels = self.ml_fluor_data.loc[:, 'Analyte']
-
-        ml_fluor_data = self.ml_fluor_data.drop('Analyte', axis=1)
-        standardised_ml_fluor_data = preprocessing.scale(
-            ml_fluor_data.to_numpy(), axis=0, copy=True
-        )  # Normalises (by subtracting the mean and dividing by the standard
-        # deviation) the readings for each peptide, as required by several ML
-        # algorithms
-        standardised_ml_fluor_df = pd.concat(
-            [pd.DataFrame(standardised_ml_fluor_data), analyte_labels], axis=1
-        )
-        standardised_ml_fluor_df.columns = columns
-
-        self.standardised_ml_fluor_data = standardised_ml_fluor_df
