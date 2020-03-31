@@ -11,10 +11,10 @@ import seaborn as sns
 
 sns.set()
 
-if __name__ == 'array_sensing.train':
-    from array_sensing.parse_array_data import DefData
+if __name__ == 'subroutines.train':
+    from subroutines.parse_array_data import DefData
 else:
-    from sensing_array_paper.array_sensing.parse_array_data import DefData
+    from array_sensing.subroutines.parse_array_data import DefData
 
 
 class RunML(DefData):
@@ -87,13 +87,13 @@ class RunML(DefData):
 
         Input
         --------
-        percent_test: The percentage of the total classes to include in each
+        - percent_test: The percentage of the total classes to include in each
         subset
 
         Output
         --------
-        test_classes: List of lists of subclasses selected to form the test set
-        in successive train test splits
+        - test_classes: List of lists of subclasses selected to form the test
+        set in successive train test splits
         """
 
         if self.subclass_split is False:
@@ -195,11 +195,11 @@ class RunML(DefData):
         self.train_y = self.y[train_set]
         self.test_y = self.y[test_set]
         if self.randomise is True:
-            self.train_groups = self.groups[train_set]
-            self.test_groups = self.groups[test_set]
-        elif self.randomise is False:
             self.train_groups = None
             self.test_groups = None
+        elif self.randomise is False:
+            self.train_groups = self.groups[train_set]
+            self.test_groups = self.groups[test_set]
 
     def calc_feature_correlations(self, train_data):
         """
@@ -208,13 +208,13 @@ class RunML(DefData):
 
         Input
         --------
-        train_data: DataFrame of the training data, with features as column
+        - train_data: DataFrame of the training data, with features as column
         names
 
         Output
         --------
-        correlation matrix: DataFrame of Spearman's rank correlation coefficient
-        values for all pairwise combinations of features
+        - correlation matrix: DataFrame of Spearman's rank correlation
+        coefficient values for all pairwise combinations of features
         """
 
         feature_corr_df = train_data.drop('Analyte', axis=1)  # Must be a
@@ -243,10 +243,10 @@ class RunML(DefData):
 
         Input
         --------
-        x_train: Numpy array of x values of training data
-        y_train: Numpy array of y values of training data
-        features: List of feature (barrel) names
-        method_classif: Either 'f_classif' or 'mutual_info_classif'. From the
+        - x_train: Numpy array of x values of training data
+        - y_train: Numpy array of y values of training data
+        - features: List of feature (barrel) names
+        - method_classif: Either 'f_classif' or 'mutual_info_classif'. From the
         scikit-learn docs - 'The methods based on F-test (f_classif) estimate
         the degree of linear dependency between two random variables. On the
         other hand, mutual information methods can capture any kind of
@@ -255,7 +255,7 @@ class RunML(DefData):
 
         Output
         --------
-        score_df: DataFrame of features and their scores
+        - score_df: DataFrame of features and their scores
         """
 
         from sklearn.feature_selection import SelectKBest
@@ -306,8 +306,8 @@ class RunML(DefData):
 
         Input
         --------
-        x_tain: Numpy array of x values of training data
-        features: List of feature (barrel) names
+        - x_tain: Numpy array of x values of training data
+        - features: List of feature (barrel) names
         """
 
         from sklearn.decomposition import PCA
@@ -328,20 +328,60 @@ class RunML(DefData):
         plt.savefig('{}/PCA_scree_plot.svg'.format(self.results_dir))
         plt.show()
 
-    def define_model_params(self, clf, x_train):
+    def define_fixed_model_params(self, clf):
         """
-        For each of the ML algorithms implemented in this code, returns
-        dictionary of a sensible range of hyperparameter values to test in
-        randomised / grid search
+        For the 6 default Ml algorithms run by this code (LogisticRegression,
+        KNeighborsClassifier, GaussianNB, LinearSVC, SVC and
+        RandomForestClassifier), defines a dictionary of hyperparameters and
+        their corresponding values that will remain fixed throughout
+        optimisation and training
 
         Input
         --------
-        clf: The selected ML algorithm, e.g. sklearn.ensemble.RandomForestClassifier()
-        x_train: Numpy array of x values of training data
+        - clf: The selected ML algorithm,
+        e.g. sklearn.ensemble.RandomForestClassifier()
 
         Output
         --------
-        params: Dictionary of parameter ranges that can be fed into
+        - params: Dictionary of fixed hyperparameters
+        """
+
+        if type(clf).__name__ == 'LogisticRegression':
+            params = {'n_jobs': -1}
+        elif type(clf).__name__ == 'KNeighborsClassifier':
+            params = {'metric': 'minkowski',
+                      'n_jobs': -1}
+        elif type(clf).__name__ == 'LinearSVC':
+            params = {'dual': False}  # Change back to True (= default) if
+            # n_samples < n_features
+        elif type(clf).__name__ == 'SVC':
+            # For speed reasons (some kernels take a prohibitively long time to
+            # train) am sticking with the default kernel ('rbf')
+            params = {}
+        elif type(clf).__name__ == 'RandomForestClassifier':
+            params = {'n_jobs': -1}
+        elif type(clf).__name__ == 'GaussianNB':
+            params = {}
+
+        return params
+
+    def define_tuned_model_params(self, clf, x_train):
+        """
+        For the 6 default Ml algorithms run by this code (LogisticRegression,
+        KNeighborsClassifier, GaussianNB, LinearSVC, SVC and
+        RandomForestClassifier), returns dictionary of a sensible range of
+        values for variable hyperparameters to be tested in randomised / grid
+        search
+
+        Input
+        --------
+        - clf: The selected ML algorithm,
+        e.g. sklearn.ensemble.RandomForestClassifier()
+        - x_train: Numpy array of x values of training data
+
+        Output
+        --------
+        - params: Dictionary of parameter ranges that can be fed into
         RandomizedSearchCV or GridSearchCV
         """
 
@@ -386,10 +426,10 @@ class RunML(DefData):
 
         Input
         --------
-        best_params: Dictionary of 'optimal' parameters returned by
+        - best_params: Dictionary of 'optimal' parameters returned by
         hyperparameter optimisation algorithm (e.g. RandomizedSearchCV or
         GridSearchCV)
-        poss_params: Dictionary of hyperparameter ranges fed into the
+        - poss_params: Dictionary of hyperparameter ranges fed into the
         hyperparameter optimisation algorithm, such as that returned by
         define_model_params
         """
@@ -429,37 +469,37 @@ class RunML(DefData):
 
         Input
         --------
-        x_train: Numpy array of x values of training data
-        y_train: Numpy array of y values of training data
-        train_groups: Numpy array of group names of training data
-        clf: Selected classifier from the sklearn package,
+        - x_train: Numpy array of x values of training data
+        - y_train: Numpy array of y values of training data
+        - train_groups: Numpy array of group names of training data
+        - clf: Selected classifier from the sklearn package,
         e.g. sklearn.ensemble.RandomForestClassifier(n_jobs=-1)
-        splits: Generator function that yields train: test splits of the input
+        - splits: Generator function that yields train: test splits of the input
         data (x_train and y_train) for cross-validation
-        resampling_method: Name of the method used to resample the data in an
+        - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'adasyn'; 'smoteenn'; and 'smotetomek'.
-        n_components_pca: The number of components to tranform the data to after
+        - n_components_pca: The number of components to tranform the data to after
         fitting the data with PCA
-        params: Dictionary of hyperparameter values to search.
+        - params: Dictionary of hyperparameter values to search.
         Key = hyperparameter name (must match the name of the parameter in the
         selected sklearn ML classifier class); Value = range of values to
         test for that hyperparameter - note that all numerical ranges must be
         supplied as numpy arrays in order to avoid throwing an error with the
         imblearn Pipeline() class
-        scoring_func: The function used to score the fitted classifier on the
+        - scoring_func: The function used to score the fitted classifier on the
         data set aside for validation during cross-validation. Either a
         function, or the name of one of the scoring functions in sklearn (see
         list of recognised names at https://scikit-learn.org/stable/modules/
         model_evaluation.html#scoring-parameter).
-        n_iter: The number of hyperparameter combinations to test, if set to ''
+        - n_iter: The number of hyperparameter combinations to test, if set to ''
         will be set to either 25 or 10% of the total number of possible
         combinations of hyperparameter values specified in the params dictionary
         (whichever is larger).
 
         Output
         --------
-        random_search: RandomizedSearchCV object fitted to the training data
+        - random_search: RandomizedSearchCV object fitted to the training data
         """
 
         from imblearn.pipeline import Pipeline
@@ -522,25 +562,25 @@ class RunML(DefData):
 
         Input
         --------
-        x_train: Numpy array of x values of training data
-        y_train: Numpy array of y values of training data
-        train_groups: Numpy array of group names of training data
-        clf: Selected classifier from the sklearn package,
+        - x_train: Numpy array of x values of training data
+        - y_train: Numpy array of y values of training data
+        - train_groups: Numpy array of group names of training data
+        - clf: Selected classifier from the sklearn package,
         e.g. sklearn.ensemble.RandomForestClassifier(n_jobs=-1)
-        splits: Generator function that yields train: test splits of the input
+        - splits: Generator function that yields train: test splits of the input
         data (x_train and y_train) for cross-validation
-        resampling_method: Name of the method used to resample the data in an
+        - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'adasyn'; 'smoteenn'; and 'smotetomek'.
-        n_components_pca: The number of components to tranform the data to after
+        - n_components_pca: The number of components to tranform the data to after
         fitting the data with PCA
-        params: Dictionary of hyperparameter values to search.
+        - params: Dictionary of hyperparameter values to search.
         Key = hyperparameter name (must match the name of the parameter in the
         selected sklearn ML classifier class); Value = range of values to
         test for that hyperparameter - note that all numerical ranges must be
         supplied as numpy arrays in order to avoid throwing an error with the
         imblearn Pipeline() class
-        scoring_func: The function used to score the fitted classifier on the
+        - scoring_func: The function used to score the fitted classifier on the
         data set aside for validation during cross-validation. Either a
         function, or the name of one of the scoring functions in sklearn (see
         list of recognised names at https://scikit-learn.org/stable/modules/
@@ -548,7 +588,7 @@ class RunML(DefData):
 
         Output
         --------
-        grid_search: GridSearchCV object fitted to the training data
+        - grid_search: GridSearchCV object fitted to the training data
         """
 
         from imblearn.pipeline import Pipeline
@@ -595,19 +635,19 @@ class RunML(DefData):
 
         Input
         --------
-        x_train: Numpy array of x values of training data
-        y_train: Numpy array of y values of training data
-        train_groups: Numpy array of group names of training data
-        clf: Selected classifier from the sklearn package,
+        - x_train: Numpy array of x values of training data
+        - y_train: Numpy array of y values of training data
+        - train_groups: Numpy array of group names of training data
+        - clf: Selected classifier from the sklearn package,
         e.g. sklearn.ensemble.RandomForestClassifier(n_jobs=-1)
-        splits: Generator function that yields train: test splits of the input
+        - splits: Generator function that yields train: test splits of the input
         data (x_train and y_train) for cross-validation
-        resampling_method: Name of the method used to resample the data in an
+        - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'adasyn'; 'smoteenn'; and 'smotetomek'.
-        n_components_pca: The number of components to tranform the data to after
-        fitting the data with PCA
-        scoring_func: The function used to score the fitted classifier on the
+        - n_components_pca: The number of components to tranform the data to
+        after fitting the data with PCA
+        - scoring_func: The function used to score the fitted classifier on the
         data set aside for validation during cross-validation. Either a
         function, or the name of one of the scoring functions in sklearn (see
         list of recognised names at https://scikit-learn.org/stable/modules/
@@ -615,11 +655,11 @@ class RunML(DefData):
 
         Output
         --------
-        std_pca_clf: Model fitted to the training data. This can be fed into
+        - std_pca_clf: Model fitted to the training data. This can be fed into
         test_model to measure how well the model predicts the classes of the
         test data set aside by split_train_test_data.
-        train_scores: The value of the selected scoring function calculated from
-        cross-validation of the model on the training data.
+        - train_scores: The value of the selected scoring function calculated
+        from cross-validation of the model on the training data.
         """
 
         from imblearn.pipeline import Pipeline
@@ -658,16 +698,16 @@ class RunML(DefData):
 
         Input
         --------
-        x_test: Numpy array of x values of test data
-        y_test: Numpy array of y values of test data
-        clf: Model previously fitted to the training data
-        test_scoring_funcs: Dictionary of sklearn scoring functions and
+        - x_test: Numpy array of x values of test data
+        - y_test: Numpy array of y values of test data
+        - clf: Model previously fitted to the training data
+        - test_scoring_funcs: Dictionary of sklearn scoring functions and
         dictionaries of arguments to be fed into these functions.
         E.g. sklearn.metrics.f1_score: {'average': 'macro'}
 
         Output
         --------
-        test_scores: Dictionary of user-specified scoring functions and their
+        - test_scores: Dictionary of user-specified scoring functions and their
         values as calculated from the class label predictions made by the model
         on the testing data
         """
@@ -709,7 +749,7 @@ class RunML(DefData):
         plt.savefig('{}/{}_confusion_matrix.svg'.format(self.results_dir, type(clf).__name__))
         plt.show()
 
-        return test_scores
+        return predictions, test_scores
 
     def run_algorithm(
         self, clf, x_train, y_train, train_groups, x_test, y_test,
@@ -725,57 +765,57 @@ class RunML(DefData):
 
         Input
         --------
-        clf: Selected classifier from the sklearn package,
+        - clf: Selected classifier from the sklearn package,
         e.g. sklearn.ensemble.RandomForestClassifier(n_jobs=-1)
-        x_train: Numpy array of x values of training data
-        y_train: Numpy array of y values of training data
-        train_groups: Numpy array of group names of training data
-        x_test: Numpy array of x values of test data
-        y_test: Numpy array of y values of test data
-        n_components_pca: The number of components to tranform the data to after
-        fitting the data with PCA
-        run: Either 'randomsearch', 'gridsearch' or 'train'. Directs the
+        - x_train: Numpy array of x values of training data
+        - y_train: Numpy array of y values of training data
+        - train_groups: Numpy array of group names of training data
+        - x_test: Numpy array of x values of test data
+        - y_test: Numpy array of y values of test data
+        - n_components_pca: The number of components to tranform the data to
+        after fitting the data with PCA
+        - run: Either 'randomsearch', 'gridsearch' or 'train'. Directs the
         function whether to run cross-validation with RandomizedSearchCV or
         GridSearchCV to select a suitable combination of hyperparameter values,
         or whether to train and test the model.
-        params: If run == 'randomsearch' or 'gridsearch', params is a dictionary
-        of hyperparameter values to search. Key = hyperparameter name (must
-        match the name of the parameter in the selected sklearn ML classifier
-        class); Value = range of values to test for that hyperparameter - note
-        that all numerical ranges must be supplied as numpy arrays in order to
-        avoid throwing an error with the imblearn Pipeline() class. Else if
-        run == 'train', params is also a dictionary of hyperparameters, but in
-        this case a single value is provided for each hyperparameter as opposed
-        to a range.
-        train_scoring_func: The function used to score the fitted classifier on
-        the data set aside for validation during cross-validation. Either a
+        - params: If run == 'randomsearch' or 'gridsearch', params is a
+        dictionary of hyperparameter values to search. Key = hyperparameter name
+        (must match the name of the parameter in the selected sklearn ML
+        classifier class); Value = range of values to test for that
+        hyperparameter - note that all numerical ranges must be supplied as
+        numpy arrays in order to avoid throwing an error with the imblearn
+        Pipeline() class. Else if run == 'train', params is also a dictionary of
+        hyperparameters, but in this case a single value is provided for each
+        hyperparameter as opposed to a range.
+        - train_scoring_func: The function used to score the fitted classifier
+        on the data set aside for validation during cross-validation. Either a
         function, or the name of one of the scoring functions in sklearn (see
         list of recognised names at https://scikit-learn.org/stable/modules/
         model_evaluation.html#scoring-parameter).
-        test_scoring_funcs: Dictionary of sklearn scoring functions and
+        - test_scoring_funcs: Dictionary of sklearn scoring functions and
         dictionaries of arguments to be fed into these functions.
         E.g. sklearn.metrics.f1_score: {'average': 'macro'}
-        resampling_method: Name of the method used to resample the data in an
+        - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'adasyn'; 'smoteenn'; and 'smotetomek'.
-        n_iter: Integer number of hyperparameter combinations to test / ''. If
+        - n_iter: Integer number of hyperparameter combinations to test / ''. If
         set to '' will be set to either 25 or 10% of the total number of
         possible combinations of hyperparameter values specified in the params
         dictionary (whichever is larger).
-        cv_folds: Integer number of folds to run in cross-validation. E.g. as a
-        default cv_folds = 5, which generates 5 folds of training and validation
-        data, with 80% and 20% of the data forming the training and validation
-        sets respectively.
+        - cv_folds: Integer number of folds to run in cross-validation. E.g. as
+        a default cv_folds = 5, which generates 5 folds of training and
+        validation data, with 80% and 20% of the data forming the training and
+        validation sets respectively.
 
         Output
         --------
-        searches: Dictionary of the selected resampling methods and the
+        - searches: Dictionary of the selected resampling methods and the
         corresponding output from fitting the user-specified algorithm (either a
         RandomizedSearchCV / GridSearchCV object, or a model fitted to the
         resampled training data).
-        train_scores: The value of the selected scoring function calculated from
-        cross-validation of the model on the training data.
-        test_scores: Dictionary of user-specified scoring functions and their
+        - train_scores: The value of the selected scoring function calculated
+        from cross-validation of the model on the training data.
+        - test_scores: Dictionary of user-specified scoring functions and their
         values as calculated from the class label predictions made by the model
         on the testing data
         """
@@ -788,6 +828,7 @@ class RunML(DefData):
         searches = {}
         train_scores = {}
         test_scores = {}
+        predictions = np.array([])
 
         for method in resampling_method:
             if method == 'no_balancing':
@@ -831,522 +872,100 @@ class RunML(DefData):
                     x_train, y_train, train_groups, clf, splits, resampling_obj,
                     n_components_pca, train_scoring_func
                 )
-                test_score_subset = self.test_model(
+                predictions, test_score_subset = self.test_model(
                     x_test, y_test, search, test_scoring_funcs
                 )
                 searches[method] = search
                 train_scores[method] = train_score_subset
                 test_scores[method] = test_score_subset
 
-        return searches, train_scores, test_scores
+        return searches, train_scores, test_scores, predictions
 
-    def run_logistic_regression(
-        self, x_train, y_train, train_groups, x_test, y_test, n_components_pca,
-        run, params, train_scoring_func, test_scoring_funcs=None,
-        resampling_method=['no_balancing'], n_iter='', cv_folds=5
-    ):
-        """
-        Fits a logistic regression model to the data.
-
-        Input
-        --------
-        x_train: Numpy array of x values of training data
-        y_train: Numpy array of y values of training data
-        train_groups: Numpy array of group names of training data
-        x_test: Numpy array of x values of test data
-        y_test: Numpy array of y values of test data
-        n_components_pca: The number of components to tranform the data to after
-        fitting the data with PCA
-        run: Either 'randomsearch', 'gridsearch' or 'train'. Directs the
-        function whether to run cross-validation with RandomizedSearchCV or
-        GridSearchCV to select a suitable combination of hyperparameter values,
-        or whether to train and test the model.
-        params: If run == 'randomsearch' or 'gridsearch', params is a dictionary
-        of hyperparameter values to search. Key = hyperparameter name (must
-        match the name of the parameter in the LogisticRegression() class);
-        Value = range of values to test for that hyperparameter - note that all
-        numerical ranges must be supplied as numpy arrays in order to avoid
-        throwing an error with the imblearn Pipeline() class. Else if
-        run == 'train', params is also a dictionary of hyperparameters, but in
-        this case a single value is provided for each hyperparameter as opposed
-        to a range.
-        train_scoring_func: The function used to score the fitted classifier on
-        the data set aside for validation during cross-validation. Either a
-        function, or the name of one of the scoring functions in sklearn (see
-        list of recognised names at https://scikit-learn.org/stable/modules/
-        model_evaluation.html#scoring-parameter).
-        test_scoring_funcs: Required if run == 'train'. Dictionary of sklearn
-        scoring functions and dictionaries of arguments to be fed into these
-        functions. E.g. sklearn.metrics.f1_score: {'average': 'macro'}
-        resampling_method: Name of the method used to resample the data in an
-        imbalanced dataset. Recognised method names are: 'no_balancing';
-        'max_sampling'; 'smote'; 'adasyn'; 'smoteenn'; and 'smotetomek'.
-        n_iter: Required if run == 'randomsearch'. Integer number of
-        hyperparameter combinations to test / ''. If set to '' will be set to
-        either 25 or 10% of the total number of possible combinations of
-        hyperparameter values specified in the params dictionary (whichever is
-        larger).
-        cv_folds: Integer number of folds to run in cross-validation. E.g. as a
-        default cv_folds = 5, which generates 5 folds of training and validation
-        data, with 80% and 20% of the data forming the training and validation
-        sets respectively.
-
-        Output
-        --------
-        searches: Dictionary of the selected resampling methods and the
-        corresponding output from fitting the user-specified algorithm (either a
-        RandomizedSearchCV / GridSearchCV object, or a model fitted to the
-        resampled training data).
-        train_scores: The value of the selected scoring function calculated from
-        cross-validation of the model on the training data.
-        test_scores: Dictionary of user-specified scoring functions and their
-        values as calculated from the class label predictions made by the model
-        on the testing data
-        """
-
-        from sklearn.linear_model import LogisticRegression
-
-        run = run.lower().replace(' ', '')
-        if run in ['randomsearch', 'gridsearch']:
-            clf = LogisticRegression(n_jobs=-1)
-            searches, *_ = self.run_algorithm(
-                clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, params, train_scoring_func,
-                test_scoring_funcs, resampling_method, n_iter, cv_folds
-            )
-            return searches
-
-        elif run == 'train':
-            params['n_jobs'] = -1
-            clf = LogisticRegression(**params)
-            searches, train_scores, test_scores = self.run_algorithm(
-                clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, {}, train_scoring_func,
-                test_scoring_funcs, resampling_method, n_iter, cv_folds
-            )
-            return searches, train_scores, test_scores
-
-    def run_k_nearest_neighbours(
-        self, x_train, y_train, train_groups, x_test, y_test, n_components_pca,
-        run, params, train_scoring_func, test_scoring_funcs=None,
-        resampling_method=['no_balancing'], n_iter='', cv_folds=5
-    ):
-        """
-        Fits a k nearest neighbours classifier to the data.
-
-        Input
-        --------
-        x_train: Numpy array of x values of training data
-        y_train: Numpy array of y values of training data
-        train_groups: Numpy array of group names of training data
-        x_test: Numpy array of x values of test data
-        y_test: Numpy array of y values of test data
-        n_components_pca: The number of components to tranform the data to after
-        fitting the data with PCA
-        run: Either 'randomsearch', 'gridsearch' or 'train'. Directs the
-        function whether to run cross-validation with RandomizedSearchCV or
-        GridSearchCV to select a suitable combination of hyperparameter values,
-        or whether to train and test the model.
-        params: If run == 'randomsearch' or 'gridsearch', params is a dictionary
-        of hyperparameter values to search. Key = hyperparameter name (must
-        match the name of the parameter in the KNeighborsClassifier() class);
-        Value = range of values to test for that hyperparameter - note that all
-        numerical ranges must be supplied as numpy arrays in order to avoid
-        throwing an error with the imblearn Pipeline() class. Else if
-        run == 'train', params is also a dictionary of hyperparameters, but in
-        this case a single value is provided for each hyperparameter as opposed
-        to a range.
-        train_scoring_func: The function used to score the fitted classifier on
-        the data set aside for validation during cross-validation. Either a
-        function, or the name of one of the scoring functions in sklearn (see
-        list of recognised names at https://scikit-learn.org/stable/modules/
-        model_evaluation.html#scoring-parameter).
-        test_scoring_funcs: Required if run == 'train'. Dictionary of sklearn
-        scoring functions and dictionaries of arguments to be fed into these
-        functions. E.g. sklearn.metrics.f1_score: {'average': 'macro'}
-        resampling_method: Name of the method used to resample the data in an
-        imbalanced dataset. Recognised method names are: 'no_balancing';
-        'max_sampling'; 'smote'; 'adasyn'; 'smoteenn'; and 'smotetomek'.
-        n_iter: Required if run == 'randomsearch'. Integer number of
-        hyperparameter combinations to test / ''. If set to '' will be set to
-        either 25 or 10% of the total number of possible combinations of
-        hyperparameter values specified in the params dictionary (whichever is
-        larger).
-        cv_folds: Integer number of folds to run in cross-validation. E.g. as a
-        default cv_folds = 5, which generates 5 folds of training and validation
-        data, with 80% and 20% of the data forming the training and validation
-        sets respectively.
-
-        Output
-        --------
-        searches: Dictionary of the selected resampling methods and the
-        corresponding output from fitting the user-specified algorithm (either a
-        RandomizedSearchCV / GridSearchCV object, or a model fitted to the
-        resampled training data).
-        train_scores: The value of the selected scoring function calculated from
-        cross-validation of the model on the training data.
-        test_scores: Dictionary of user-specified scoring functions and their
-        values as calculated from the class label predictions made by the model
-        on the testing data
-        """
-
-        from sklearn.neighbors import KNeighborsClassifier
-
-        run = run.lower().replace(' ', '')
-        if run in ['randomsearch', 'gridsearch']:
-            clf = KNeighborsClassifier(metric='minkowski', n_jobs=-1)
-            searches, *_ = self.run_algorithm(
-                clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, params, train_scoring_func,
-                test_scoring_funcs, resampling_method, n_iter, cv_folds
-            )
-            return searches
-
-        elif run == 'train':
-            params['metric'] = 'minkowski'
-            params['n_jobs'] = -1
-            clf = KNeighborsClassifier(**params)
-            searches, train_scores, test_scores = self.run_algorithm(
-                clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, {}, train_scoring_func,
-                test_scoring_funcs, resampling_method, n_iter, cv_folds
-            )
-            return searches, train_scores, test_scores
-
-    def run_naive_Bayes(
-        self, x_train, y_train, train_groups, x_test, y_test, n_components_pca,
-        run='train', params={}, train_scoring_func='f1_score',
+    def run_ml(
+        self, clf, x_train, y_train, train_groups, x_test, y_test,
+        n_components_pca, run, fixed_params, tuned_params, train_scoring_func,
         test_scoring_funcs=None, resampling_method=['no_balancing'], n_iter='',
         cv_folds=5
     ):
         """
-        Fits a Gaussian Naive Bayes classifier to the data.
-        Note the differences between this function and the functions that fit
-        alternative ML algorithms, which result from the fact that there are no
-        hyperparameters to optimise for this algorithm.
+        Fits an input sklearn classifier to the data.
 
         Input
         --------
-        x_train: Numpy array of x values of training data
-        y_train: Numpy array of y values of training data
-        train_groups: Numpy array of group names of training data
-        x_test: Numpy array of x values of test data
-        y_test: Numpy array of y values of test data
-        n_components_pca: The number of components to tranform the data to after
-        fitting the data with PCA
-        run: Since there are no hyperparameters to optimise for this model, run
-        must be set equal to 'train'.
-        params: Since there are no hyperparameters to optimise for this model,
-        must be set equal to an empty dictionary.
-        train_scoring_func: The function used to score the fitted classifier on
-        the data set aside for validation during cross-validation. Either a
-        function, or the name of one of the scoring functions in sklearn (see
-        list of recognised names at https://scikit-learn.org/stable/modules/
-        model_evaluation.html#scoring-parameter).
-        test_scoring_funcs: Required if run == 'train'. Dictionary of sklearn
-        scoring functions and dictionaries of arguments to be fed into these
-        functions. E.g. sklearn.metrics.f1_score: {'average': 'macro'}
-        resampling_method: Name of the method used to resample the data in an
-        imbalanced dataset. Recognised method names are: 'no_balancing';
-        'max_sampling'; 'smote'; 'adasyn'; 'smoteenn'; and 'smotetomek'.
-        n_iter: Not required to be defined since run cannot equal
-        'randomsearch'. Argument included for compatibility reasons only.
-        cv_folds: Integer number of folds to run in cross-validation. E.g. as a
-        default cv_folds = 5, which generates 5 folds of training and validation
-        data, with 80% and 20% of the data forming the training and validation
-        sets respectively.
-
-        Output
-        --------
-        searches: Dictionary of the selected resampling methods and a GaussianNB
-        model fitted to the resampled training data.
-        train_scores: The value of the selected scoring function calculated from
-        cross-validation of the model on the training data.
-        test_scores: Dictionary of user-specified scoring functions and their
-        values as calculated from the class label predictions made by the model
-        on the testing data
-        """
-
-        from sklearn.naive_bayes import GaussianNB
-
-        run = run.lower().replace(' ', '')
-        if run in ['randomsearch', 'gridsearch']:
-            # Prints rather than raises a ValueError, in order to allow this
-            # function to be run with others as part of a loop to e.g. perform
-            # spot checking to decide upon an algorithm to use.
-            print('ValueError: Gaussian Naive Bayes model has no hyperparameter'
-                  'values to optimise - please set run=\'train\'')
-            clf = GaussianNB()
-            searches, *_ = self.run_algorithm(
-                clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, params, train_scoring_func,
-                test_scoring_funcs, resampling_method, n_iter, cv_folds
-            )
-            return searches
-
-        elif run == 'train':
-            clf = GaussianNB()
-            searches, train_scores, test_scores = self.run_algorithm(
-                clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, {}, train_scoring_func,
-                test_scoring_funcs, resampling_method, n_iter, cv_folds
-            )
-            return searches, train_scores, test_scores
-
-    def run_linear_svc(
-        self, x_train, y_train, train_groups, x_test, y_test, n_components_pca,
-        run, params, train_scoring_func, test_scoring_funcs=None,
-        resampling_method=['no_balancing'], n_iter='', cv_folds=5
-    ):
-        """
-        Fits a linear support vector classifier to the data.
-
-        Input
-        --------
-        x_train: Numpy array of x values of training data
-        y_train: Numpy array of y values of training data
-        train_groups: Numpy array of group names of training data
-        x_test: Numpy array of x values of test data
-        y_test: Numpy array of y values of test data
-        n_components_pca: The number of components to tranform the data to after
-        fitting the data with PCA
-        run: Either 'randomsearch', 'gridsearch' or 'train'. Directs the
+        - clf: Selected classifier from the sklearn package,
+        e.g. sklearn.ensemble.RandomForestClassifier
+        - x_train: Numpy array of x values of training data
+        - y_train: Numpy array of y values of training data
+        - train_groups: Numpy array of group names of training data
+        - x_test: Numpy array of x values of test data
+        - y_test: Numpy array of y values of test data
+        - n_components_pca: The number of components to tranform the data to
+        after fitting the data with PCA
+        - run: Either 'randomsearch', 'gridsearch' or 'train'. Directs the
         function whether to run cross-validation with RandomizedSearchCV or
         GridSearchCV to select a suitable combination of hyperparameter values,
         or whether to train and test the model.
-        params: If run == 'randomsearch' or 'gridsearch', params is a dictionary
-        of hyperparameter values to search. Key = hyperparameter name (must
-        match the name of the parameter in the LinearSVC() class); Value = range
-        of values to test for that hyperparameter - note that all numerical
-        ranges must be supplied as numpy arrays in order to avoid throwing an
-        error with the imblearn Pipeline() class. Else if run == 'train', params
-        is also a dictionary of hyperparameters, but in this case a single value
-        is provided for each hyperparameter as opposed to a range.
-        train_scoring_func: The function used to score the fitted classifier on
-        the data set aside for validation during cross-validation. Either a
-        function, or the name of one of the scoring functions in sklearn (see
-        list of recognised names at https://scikit-learn.org/stable/modules/
-        model_evaluation.html#scoring-parameter).
-        test_scoring_funcs: Required if run == 'train'. Dictionary of sklearn
-        scoring functions and dictionaries of arguments to be fed into these
-        functions. E.g. sklearn.metrics.f1_score: {'average': 'macro'}
-        resampling_method: Name of the method used to resample the data in an
-        imbalanced dataset. Recognised method names are: 'no_balancing';
-        'max_sampling'; 'smote'; 'adasyn'; 'smoteenn'; and 'smotetomek'.
-        n_iter: Required if run == 'randomsearch'. Integer number of
-        hyperparameter combinations to test / ''. If set to '' will be set to
-        either 25 or 10% of the total number of possible combinations of
-        hyperparameter values specified in the params dictionary (whichever is
-        larger).
-        cv_folds: Integer number of folds to run in cross-validation. E.g. as a
-        default cv_folds = 5, which generates 5 folds of training and validation
-        data, with 80% and 20% of the data forming the training and validation
-        sets respectively.
-
-        Output
-        --------
-        searches: Dictionary of the selected resampling methods and the
-        corresponding output from fitting the user-specified algorithm (either a
-        RandomizedSearchCV / GridSearchCV object, or a model fitted to the
-        resampled training data).
-        train_scores: The value of the selected scoring function calculated from
-        cross-validation of the model on the training data.
-        test_scores: Dictionary of user-specified scoring functions and their
-        values as calculated from the class label predictions made by the model
-        on the testing data
-        """
-
-        from sklearn.svm import LinearSVC
-
-        run = run.lower().replace(' ', '')
-        if run in ['randomsearch', 'gridsearch']:
-            clf = LinearSVC(dual=False)  # Change back to True (= default) if
-            # n_samples < n_features
-            searches, *_ = self.run_algorithm(
-                clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, params, train_scoring_func,
-                test_scoring_funcs, resampling_method, n_iter, cv_folds
-            )
-            return searches
-
-        elif run == 'train':
-            params['dual'] = False  # Change back to True (= default) if
-            # n_samples < n_features
-            clf = LinearSVC(**params)
-            search, train_scores, test_scores = self.run_algorithm(
-                clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, {}, train_scoring_func,
-                test_scoring_funcs, resampling_method, n_iter, cv_folds
-            )
-            return searches, train_scores, test_scores
-
-    def run_rbf_svc(
-        self, x_train, y_train, train_groups, x_test, y_test, n_components_pca,
-        run, params, train_scoring_func, test_scoring_funcs=None,
-        resampling_method=['no_balancing'], n_iter='', cv_folds=5
-    ):
-        """
-        Fits a support vector classifier with a radial basis function (rbf)
-        kernel to the data.
-
-        Input
-        --------
-        x_train: Numpy array of x values of training data
-        y_train: Numpy array of y values of training data
-        train_groups: Numpy array of group names of training data
-        x_test: Numpy array of x values of test data
-        y_test: Numpy array of y values of test data
-        n_components_pca: The number of components to tranform the data to after
-        fitting the data with PCA
-        run: Either 'randomsearch', 'gridsearch' or 'train'. Directs the
-        function whether to run cross-validation with RandomizedSearchCV or
-        GridSearchCV to select a suitable combination of hyperparameter values,
-        or whether to train and test the model.
-        params: If run == 'randomsearch' or 'gridsearch', params is a dictionary
-        of hyperparameter values to search. Key = hyperparameter name (must
-        match the name of the parameter in the SVC() class); Value = range of
-        values to test for that hyperparameter - note that all numerical ranges
-        must be supplied as numpy arrays in order to avoid throwing an error
-        with the imblearn Pipeline() class. Else if run == 'train', params is
-        also a dictionary of hyperparameters, but in this case a single value is
-        provided for each hyperparameter as opposed to a range.
-        train_scoring_func: The function used to score the fitted classifier on
-        the data set aside for validation during cross-validation. Either a
-        function, or the name of one of the scoring functions in sklearn (see
-        list of recognised names at https://scikit-learn.org/stable/modules/
-        model_evaluation.html#scoring-parameter).
-        test_scoring_funcs: Required if run == 'train'. Dictionary of sklearn
-        scoring functions and dictionaries of arguments to be fed into these
-        functions. E.g. sklearn.metrics.f1_score: {'average': 'macro'}
-        resampling_method: Name of the method used to resample the data in an
-        imbalanced dataset. Recognised method names are: 'no_balancing';
-        'max_sampling'; 'smote'; 'adasyn'; 'smoteenn'; and 'smotetomek'.
-        n_iter: Required if run == 'randomsearch'. Integer number of
-        hyperparameter combinations to test / ''. If set to '' will be set to
-        either 25 or 10% of the total number of possible combinations of
-        hyperparameter values specified in the params dictionary (whichever is
-        larger).
-        cv_folds: Integer number of folds to run in cross-validation. E.g. as a
-        default cv_folds = 5, which generates 5 folds of training and validation
-        data, with 80% and 20% of the data forming the training and validation
-        sets respectively.
-
-        Output
-        --------
-        searches: Dictionary of the selected resampling methods and the
-        corresponding output from fitting the user-specified algorithm (either a
-        RandomizedSearchCV / GridSearchCV object, or a model fitted to the
-        resampled training data).
-        train_scores: The value of the selected scoring function calculated from
-        cross-validation of the model on the training data.
-        test_scores: Dictionary of user-specified scoring functions and their
-        values as calculated from the class label predictions made by the model
-        on the testing data
-        """
-
-        from sklearn.svm import SVC
-
-        run = run.lower().replace(' ', '')
-        if run in ['randomsearch', 'gridsearch']:
-            clf = SVC()
-            searches, *_ = self.run_algorithm(
-                clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, params, train_scoring_func,
-                test_scoring_funcs, resampling_method, n_iter, cv_folds
-            )
-            return searches
-
-        elif run == 'train':
-            clf = SVC(**params)
-            search, train_scores, test_scores = self.run_algorithm(
-                clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, {}, train_scoring_func,
-                test_scoring_funcs, resampling_method, n_iter, cv_folds
-            )
-            return searches, train_scores, test_scores
-
-    def run_random_forest(
-        self, x_train, y_train, train_groups, x_test, y_test, n_components_pca,
-        run, params, train_scoring_func, test_scoring_funcs=None,
-        resampling_method=['no_balancing'], n_iter='', cv_folds=5
-    ):
-        """
-        Fits a random forest vector classifier to the data.
-
-        Input
-        --------
-        x_train: Numpy array of x values of training data
-        y_train: Numpy array of y values of training data
-        train_groups: Numpy array of group names of training data
-        x_test: Numpy array of x values of test data
-        y_test: Numpy array of y values of test data
-        n_components_pca: The number of components to tranform the data to after
-        fitting the data with PCA
-        run: Either 'randomsearch', 'gridsearch' or 'train'. Directs the
-        function whether to run cross-validation with RandomizedSearchCV or
-        GridSearchCV to select a suitable combination of hyperparameter values,
-        or whether to train and test the model.
-        params: If run == 'randomsearch' or 'gridsearch', params is a dictionary
-        of hyperparameter values to search. Key = hyperparameter name (must
-        match the name of the parameter in the RandomForestClassifier() class);
+        - fixed_params: Dictionary of hyperparameters and their selected values
+        that remain constant regardless of the value of 'run' (e.g. n_jobs = -1)
+        - tuned_params: If run == 'randomsearch' or 'gridsearch', tuned_params
+        is a dictionary of hyperparameter values to search. Key = hyperparameter
+        name (must match the name of the parameter in the selected clf class);
         Value = range of values to test for that hyperparameter - note that all
         numerical ranges must be supplied as numpy arrays in order to avoid
         throwing an error with the imblearn Pipeline() class. Else if
         run == 'train', params is also a dictionary of hyperparameters, but in
         this case a single value is provided for each hyperparameter as opposed
         to a range.
-        train_scoring_func: The function used to score the fitted classifier on
-        the data set aside for validation during cross-validation. Either a
+        - train_scoring_func: The function used to score the fitted classifier
+        on the data set aside for validation during cross-validation. Either a
         function, or the name of one of the scoring functions in sklearn (see
         list of recognised names at https://scikit-learn.org/stable/modules/
         model_evaluation.html#scoring-parameter).
-        test_scoring_funcs: Required if run == 'train'. Dictionary of sklearn
+        - test_scoring_funcs: Required if run == 'train'. Dictionary of sklearn
         scoring functions and dictionaries of arguments to be fed into these
         functions. E.g. sklearn.metrics.f1_score: {'average': 'macro'}
-        resampling_method: Name of the method used to resample the data in an
+        - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'adasyn'; 'smoteenn'; and 'smotetomek'.
-        n_iter: Required if run == 'randomsearch'. Integer number of
+        - n_iter: Required if run == 'randomsearch'. Integer number of
         hyperparameter combinations to test / ''. If set to '' will be set to
         either 25 or 10% of the total number of possible combinations of
         hyperparameter values specified in the params dictionary (whichever is
         larger).
-        cv_folds: Integer number of folds to run in cross-validation. E.g. as a
-        default cv_folds = 5, which generates 5 folds of training and validation
-        data, with 80% and 20% of the data forming the training and validation
-        sets respectively.
+        - cv_folds: Integer number of folds to run in cross-validation. E.g. as
+        a default cv_folds = 5, which generates 5 folds of training and
+        validation data, with 80% and 20% of the data forming the training and
+        validation sets respectively.
 
         Output
         --------
-        searches: Dictionary of the selected resampling methods and the
+        - searches: Dictionary of the selected resampling methods and the
         corresponding output from fitting the user-specified algorithm (either a
         RandomizedSearchCV / GridSearchCV object, or a model fitted to the
         resampled training data).
-        train_scores: The value of the selected scoring function calculated from
-        cross-validation of the model on the training data.
-        test_scores: Dictionary of user-specified scoring functions and their
+        - train_scores: The value of the selected scoring function calculated
+        from cross-validation of the model on the training data.
+        - test_scores: Dictionary of user-specified scoring functions and their
         values as calculated from the class label predictions made by the model
         on the testing data
         """
 
-        from sklearn.ensemble import RandomForestClassifier
-
         run = run.lower().replace(' ', '')
         if run in ['randomsearch', 'gridsearch']:
-            clf = RandomForestClassifier(n_jobs=-1)
-            search = self.run_algorithm(
+            clf = clf(**fixed_params)
+            search, *_ = self.run_algorithm(
                 clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, params, train_scoring_func,
+                n_components_pca, run, tuned_params, train_scoring_func,
                 test_scoring_funcs, resampling_method, n_iter, cv_folds
             )
             return search
 
         elif run == 'train':
-            params['n_jobs'] = -1
-            clf = RandomForestClassifier(**params)
-            search, train_scores, test_scores = self.run_algorithm(
+            params = fixed_params + tuned_params
+            clf = clf(**params)
+            search, train_scores, test_scores, predictions = self.run_algorithm(
                 clf, x_train, y_train, train_groups, x_test, y_test,
                 n_components_pca, run, {}, train_scoring_func,
                 test_scoring_funcs, resampling_method, n_iter, cv_folds
             )
-            return search, train_scores, test_scores
+            return search, train_scores, test_scores, predictions

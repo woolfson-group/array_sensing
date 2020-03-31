@@ -10,13 +10,13 @@ import numpy as np
 import pandas as pd
 from sklearn import preprocessing
 
-if __name__ == 'array_sensing.parse_array_data':
-    from array_sensing.exceptions import (
+if __name__ == 'subroutines.parse_array_data':
+    from subroutines.exceptions import (
         PlateLayoutError, FluorescenceSaturationError, NaNFluorescenceError,
         MinMaxFluorescenceError
     )
 else:
-    from sensing_array_paper.array_sensing.exceptions import (
+    from array_sensing.subroutines.exceptions import (
         PlateLayoutError, FluorescenceSaturationError, NaNFluorescenceError,
         MinMaxFluorescenceError
     )
@@ -24,7 +24,19 @@ else:
 
 def trim_dataframe(label_df):
     """
+    Works out the boundaries of dataframes parsed from input xlsx files in order
+    to excess rows and columns of np.nan values
+
+    Input
+    --------
+    - label_df: DataFrame of analyte / peptide labels parsed from an xlsx file
+
+    Output
+    --------
+    - label_df: Input DataFrame that has been trimmed to remove excess rows
+    and/or columns of np.nan data appended to its bottom and/or right hand side
     """
+
     row_index = ''
     for index in range(label_df.shape[0]):
         row_set = set(label_df.iloc[index])
@@ -50,7 +62,7 @@ def trim_dataframe(label_df):
     return label_df
 
 
-def parse_xlsx_to_dataframe(plate_path, peptide_list, gain):
+def parse_xlsx_to_dataframe(plate_path, peptide_list, gain=1):
     """
     Converts an excel xlsx file output from the plate reader into a pandas
     dataframe.
@@ -69,6 +81,8 @@ def parse_xlsx_to_dataframe(plate_path, peptide_list, gain):
 
     Output
     ----------
+    - fluor_data: DataFrame of fluorescence readings directly parsed from the
+    input xlsx file (i.e. with no further processing or reorganisation)
     - grouped_fluor_data: Dictionary of dataframes of fluorescence readings for
     each analyte
     """
@@ -151,9 +165,11 @@ def parse_xlsx_to_dataframe(plate_path, peptide_list, gain):
         rows = np.arange((r_dim*index_r), ((r_dim*index_r)+(r_dim+1)))
         # + (r+1) so that row range covers r rows
         columns = np.arange(c_dim*(index_c), ((c_dim*index_c)+(c_dim+1)))
-        # + (c+1) so that column range covers 2 columns
+        # + (c+1) so that column range covers c columns
 
-        sub_fluor_df = fluor_df.iloc[rows[0]:rows[-1], columns[0]:columns[-1]]
+        sub_fluor_df = fluor_df.iloc[
+            rows[0]:rows[-1], columns[0]:columns[-1]
+        ].reset_index(drop=True)
         sub_fluor_vals = copy.deepcopy(sub_fluor_df).to_numpy().flatten('F')
 
         ordered_fluor_vals = [plate_path, analyte]
@@ -226,6 +242,7 @@ def color_val_red(input_df):
     Colours text of selected cells red in dataframe when displayed in jupyter
     notebook
     """
+
     return 'color: red'
 
 def highlight_yellow(input_df):
@@ -233,11 +250,13 @@ def highlight_yellow(input_df):
     Highlights background of selected cells yellow in dataframe when displayed
     in jupyter notebook
     """
+
     return 'background-color: yellow'
 
 
-def calc_median_and_remove_outliers(
-    plate_df, raw_plate_data, plate_outliers, stage, alpha=0.05
+def highlight_outliers_and_calc_median(
+    plate_df, raw_plate_data, plate_outliers, stage, alpha=0.05,
+    raise_warning=True
 ):
     """
     Calculates the median of each column in a dataframe (ignoring data points
@@ -246,11 +265,33 @@ def calc_median_and_remove_outliers(
 
     Input
     ----------
-    - input_df: DataFrame, dimensions = n_samples x m_features
+    - plate_df: DataFrame of input fluorescence readings
+    - raw_plate_data: Dictionary of dataframes of fluorescence readings directly
+    parsed from the input plate data (= values), labelled by their corresponding
+    file paths (= keys)
+    - plate_outliers: Dictionary of fluoresence readings identified as outliers
+    (= values), labelled by the file path of the plate and the position of the
+    outlier reading on that plate (= keys)
+    - stage: Integer defining whether this function is being run to calculate
+    the median of readings on the same plate (stage=1) or across different
+    plates (stage=2). Must be equal to either 1 or 2.
+    - alpha: Significance level for the generalised ESD test, default 0.05
+    - raise_warning: Boolean that raises an error if a median value is
+    calculated to be NaN. By default is set to True.
 
     Output
     ----------
-    - output_ser: Series, dimensions = n_features
+    - median_df: DataFrame of the median fluorescence value (calculated
+    excluding any outlier values) of each column of fluoresence readings in the
+    input dataframe
+    - raw_plate_data: Dictionary of dataframes of fluorescence readings directly
+    parsed from the input plate data (=values), labelled by their corresponding
+    file paths (=keys), updated now to highlight any outliers in the input
+    dataframe of fluorescence readings as either red (stage=1) or yellow (stage=2)
+    - plate_outliers: Dictionary of fluoresence readings identified as outliers
+    (=values), labelled by the file path of the plate and the position of the
+    outlier reading on that plate (=keys), updated now to contain any outliers
+    in the input dataframe of fluorescence readings (plate_df)
     """
 
     import math
@@ -275,7 +316,9 @@ def calc_median_and_remove_outliers(
 
         k = 0
         while k < k_max:
-            # Calculation of Grubbs test threshold value
+            # Calculation of Grubbs test threshold value. Have double-checked
+            # that the order of addition and subtraction is correct in these
+            # calculations.
             t = stats.t.ppf((1 - (alpha / (2*(n-k)))), (n-k-2))
             numerator = (n-k-1) * t
             denominator = np.sqrt(n-k) * np.sqrt((n-k-2)+np.square(t))
@@ -285,10 +328,17 @@ def calc_median_and_remove_outliers(
             abs_diff = np.abs(feature_array - np.nanmean(feature_array))
             max_val = np.nanmax(abs_diff, axis=0)
             max_index = np.nanargmax(abs_diff, axis=0)
-            g_calculated = max_val / np.nanstd(feature_array, ddof=1)  # Uses sample standard deviation as required by test
+            g_calculated = max_val / np.nanstd(feature_array, ddof=1)  # Uses
+            # sample standard deviation as required by test
 
             if g_calculated > g_critical:
                 feature_array[max_index] = np.nan
+                #plate_df[feature][max_index] = np.nan  # Uncomment if want to
+                # remove outliers from median calculation. Currently haven't
+                # done this because median value is pretty resistant to
+                # outliers, and in the case where there are enough "outliers" to
+                # affect the median value, these "outliers" will not actually be
+                # flagged as such by the generalised ESD test
                 k += 1
 
                 plate_name = plate_df['Plate'][max_index]
@@ -319,13 +369,25 @@ def calc_median_and_remove_outliers(
                 break
 
     median_df = plate_df.drop(drop_columns, axis=1)
-    median_df = median_df.median().to_frame().transpose()
+    median_df = median_df.median(axis=0, skipna=True).to_frame().transpose()
+
+    # Raises error if any NaN values in median_df
+    if raise_warning is True:
+        nan_features = []
+        if median_df.isnull().any().any() == True:
+            for index, val in enumerate(median_df.isnull().any()):
+                if val is True:
+                    nan_features.append(median_df.columns[index])
+            raise NaNFluorescenceError(
+                '\x1b[31m ERROR - median reading(s) for {} is calculated to be '
+                'NaN. \033[0m'.format(nan_features)
+            )
 
     return median_df, raw_plate_data, plate_outliers
 
 
 def scale_min_max(
-    plate, no_pep, plate_name, cols_ignore, raw_plate_data, plate_outliers
+    plate, no_pep, cols_ignore, raw_plate_data, plate_outliers
 ):
     """
     Scales data on plate between min fluorescence reading (no analyte +
@@ -334,41 +396,56 @@ def scale_min_max(
 
     Input
     ----------
-    - plate: Dictionary of dataframes of plate fluorescence data
-    - no_pep: Name of sample without peptide in xlsx files of fluorescence data
+    - plate: Dictionary of DataFrames of fluorescence data parsed from a single
+    plate (as is output from parse_xlsx_to_dataframe), where the keys are the
+    analytes tested on the plate and the values are the corresponding DataFrames
+    of fluorescence readings
+    - no_pep: Name given to sample without peptide in input peptide array
+    - cols_ignore: List of names of peptides to exclude from the analysis
+    - raw_plate_data: Dictionary of dataframes of fluorescence readings directly
+    parsed from the input plate data (= values), labelled by their corresponding
+    file paths (= keys)
+    - plate_outliers: Dictionary of fluoresence readings identified as outliers
+    (= values), labelled by the file path of the plate and the position of the
+    outlier reading on that plate (= keys)
 
     Output
     ----------
     - scaled_plate: Dictionary of dataframes of min max scaled fluorescence
     readings for each analyte
+    - raw_plate_data: Dictionary of dataframes of fluorescence readings directly
+    parsed from the input plate data (=values), labelled by their corresponding
+    file paths (=keys), updated now to highlight any outliers in the input
+    dataframe of fluorescence readings in red
+    - plate_outliers: Dictionary of fluoresence readings identified as outliers
+    (=values), labelled by the file path of the plate and the position of the
+    outlier reading on that plate (=keys), updated now to contain any outliers
+    in the input dataframe of fluorescence readings (plate_df)
     """
 
     try:
         blank_data = copy.deepcopy(plate['blank'])
     except KeyError:
-        raise PlateLayoutError('No blank readings (= no analyte + peptide + '
-                               'fluorophore) included on plate')
-    blank_data, plate_orig_data, plate_outliers = calc_median_and_remove_outliers(
-        blank_data, raw_plate_data, plate_outliers, stage=1
+        raise PlateLayoutError('No blank readings (= peptide + fluorophore '
+                               'without analyte) included on plate')
+    blank_data, _, plate_outliers = highlight_outliers_and_calc_median(
+        blank_data, raw_plate_data, plate_outliers, stage=1, raise_warning=True
     )
-    if any(np.isnan(x) for x in blank_data.values.flatten()):
-        nan_peptides = [col for col in blank_data.columns if np.isnan(blank_data[col][0])]
-        raise NaNFluorescenceError(
-            'ERROR: Median fluorescence reading in the absence of analyte on '
-            'plate {} is NaN for barrels {}'.format(plate_name, nan_peptides)
-        )
 
     scaled_plate = {}
     analytes = [analyte for analyte in list(plate.keys()) if analyte != 'blank']
     for analyte in analytes:
         fluor_data = copy.deepcopy(plate[analyte])
 
-        # Checks that analyte + DPH fluorescence is lower than all analyte + DPH
-        # + peptide combinations (except for peptides in cols_ignore)
-        median_fluor_data, raw_plate_data, plate_outliers = calc_median_and_remove_outliers(
-            fluor_data, raw_plate_data, plate_outliers, stage=1
+        # Checks that fluorescence of analyte + DPH is lower than all analyte +
+        # DPH + peptide combinations (except for peptides in cols_ignore). Won't
+        # work for any NaN median values, but these will be dealt with at a
+        # later stage (when readings from the same repeat are combined across
+        # plates)
+        median_fluor_data, raw_plate_data, plate_outliers = highlight_outliers_and_calc_median(
+            fluor_data, raw_plate_data, plate_outliers, stage=1,
+            raise_warning=False
         )
-
         min_fluor_analyte = median_fluor_data[no_pep][0]
         for peptide in list(median_fluor_data.columns):
             if peptide != no_pep and not peptide in cols_ignore:
@@ -381,6 +458,7 @@ def scale_min_max(
                           'Analysis will continue but please CHECK YOUR DATA. '
                           '\033[0m'.format(analyte, peptide, analyte))
 
+        # Performs min max scaling for each feature
         for index_c, column in enumerate(list(fluor_data.columns)):
             if (
                     not column.endswith('_loc')
@@ -542,12 +620,11 @@ class ParseArrayData(DefData):
 
     def xlsx_to_scaled_df(self, no_pep):
         """
-        Wrapper function to parse grouped xlsx files into dataframes and
-        perform min max scaling.
+        Parses grouped xlsx files into dataframes and performs min max scaling.
 
         Input
         --------
-        - no_pep: Name of sample without peptide in peptide layout
+        - no_pep: Name of sample without peptide in peptide array
         """
 
         raw_plate_data = {}
@@ -572,7 +649,7 @@ class ParseArrayData(DefData):
                     self.min_fluor, self.max_fluor
                 )
                 scaled_plate, raw_plate_data_highlighted, outliers = scale_min_max(
-                    plate, no_pep, plate_path, self.control_peptides,
+                    plate, no_pep, self.control_peptides,
                     raw_plate_data_highlighted, outliers
                 )
                 scaled_data[repeat].append(scaled_plate)
@@ -627,7 +704,7 @@ class ParseArrayData(DefData):
         # Display dataframe with added formatting in jupyter notebook via:
         # from IPython.display import display
         # for plate in fluor_data.same_plate_outliers.keys():
-        #     display(ffluor_data.same_plate_outliers[plate])
+        #     display(fluor_data.same_plate_outliers[plate])
         self.plates = raw_plate_data
         self.same_plate_outliers = raw_plate_data_highlighted
         self.scaled_data = scaled_data
@@ -658,7 +735,9 @@ class ParseArrayData(DefData):
                             list(plate.keys())])
 
             for analyte in analytes:
-                # Groups dataframes measuring the same analyte together
+                # Groups dataframes measuring the same analyte together. Will
+                # raise an error if any of the median values are calculated to
+                # be NaN.
                 analyte_dfs = []
 
                 for plate in plate_list:
@@ -666,28 +745,14 @@ class ParseArrayData(DefData):
                         analyte_dfs.append(copy.deepcopy(plate[analyte]))
 
                 analyte_df = pd.concat(analyte_dfs, axis=0).reset_index(drop=True)
-                scaled_merged_data, raw_plate_data, outliers = calc_median_and_remove_outliers(
-                    analyte_df, raw_plate_data, outliers, stage=2
+                scaled_merged_data, raw_plate_data, outliers = highlight_outliers_and_calc_median(
+                    analyte_df, raw_plate_data, outliers, stage=2, raise_warning=True
                 )
 
                 ml_fluor_data.append(scaled_merged_data)
                 labels.append(analyte)
 
         ml_fluor_df = pd.concat(ml_fluor_data, axis=0).reset_index(drop=True)
-        if True in pd.isnull(copy.deepcopy(ml_fluor_df)).values:
-            print(ml_fluor_df)
-            print(pd.isnull(copy.deepcopy(ml_fluor_df)).values)
-            dropped_rows = [n for n in range(ml_fluor_df.shape[0])
-                            if not n in ml_fluor_df.dropna(axis=0).index]
-            print(dropped_rows)
-            print('\x1b[31m WARNING: readings dropped because they contain NaN '
-                  'values after data processing.\nCheck plates listed in '
-                  'previous warnings to make sure that all readings are '
-                  'present and that min and max fluorescence readings aren\'t '
-                  'identical \033[0m')
-            ml_fluor_df = ml_fluor_df.dropna(axis=0).reset_index(drop=True)  # Must be after calculation of dropped_rows!
-            labels = [label for index, label in enumerate(labels)
-                      if not index in dropped_rows]
         labels_df = pd.DataFrame({'Analyte': labels})
         ml_fluor_df = pd.concat([ml_fluor_df, labels_df], axis=1).reset_index(drop=True)
         self.ml_fluor_data = ml_fluor_df
