@@ -503,24 +503,12 @@ def scale_min_max(
 
 class DefData():
 
-    def __init__(self, peptide_list, results_dir):
+    def __init__(self, results_dir):
         """
-        - peptide_list: List of barrel names
         - results_dir: Path (either absolute or relative) to directory where
         output files should be saved. This directory will be created by the
         program and so should not already exist.
         """
-
-        self.peptides = peptide_list
-
-        if len(self.peptides) != len(set(self.peptides)):
-            multi_peptides = []
-            for peptide in self.peptides:
-                if self.peptides.count(peptide) > 1 and not peptide in multi_peptides:
-                    multi_peptides.append(peptide)
-            raise PlateLayoutError(
-                'Barrel(s) listed more than once: {}'.format(multi_peptides)
-            )
 
         if not os.path.isdir(results_dir):
             os.mkdir(results_dir)
@@ -575,7 +563,7 @@ class ParseArrayData(DefData):
         plate reader, default is 260,000
         """
 
-        DefData.__init__(self, peptide_list, results_dir)
+        DefData.__init__(self, results_dir)
 
         self.dir_path = dir_path
         self.repeats = repeat_names
@@ -585,6 +573,17 @@ class ParseArrayData(DefData):
         self.gain = gain
         self.min_fluor = min_fluor
         self.max_fluor = max_fluor
+
+        self.peptides = peptide_list
+
+        if len(self.peptides) != len(set(self.peptides)):
+            multi_peptides = []
+            for peptide in self.peptides:
+                if self.peptides.count(peptide) > 1 and not peptide in multi_peptides:
+                    multi_peptides.append(peptide)
+            raise PlateLayoutError(
+                'Barrel(s) listed more than once: {}'.format(multi_peptides)
+            )
 
         self.control_peptides = control_peptides
         missing_peptides = [peptide for peptide in self.control_peptides

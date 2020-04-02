@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from collections import OrderedDict
 
 sns.set()
 
@@ -20,10 +21,9 @@ else:
 class RunML(DefData):
 
     def __init__(
-        self, peptide_list, results_dir, fluor_data, classes=None
+        self, results_dir, fluor_data, classes=None
     ):
         """
-        - peptide_list: List of barrel names
         - results_dir: Path (either absolute or relative) to directory where
         output files should be saved. This directory will be created by the
         program and so should not already exist.
@@ -37,7 +37,7 @@ class RunML(DefData):
         'Sugar']
         """
 
-        DefData.__init__(self, peptide_list, results_dir)
+        DefData.__init__(self, results_dir)
         self.fluor_data = fluor_data.reset_index(drop=True)
 
         self.classes = classes
@@ -54,14 +54,15 @@ class RunML(DefData):
                     raise TypeError('classes argument should be either a 1d '
                                     'numpy array or a list')
 
-        self.x = copy.deepcopy(self.fluor_data.drop('Analyte', axis=1)).to_numpy()
+        self.drop_cols = [col for col in self.fluor_data.columns
+                          if 'analyte' in col.lower()]
+        self.x = copy.deepcopy(self.fluor_data.drop(self.drop_cols, axis=1)).to_numpy()
         if self.subclass_split is True:
             self.y = copy.deepcopy(self.classes)
             self.groups = np.array(
                 ['{}_{}'.format(self.classes[n], self.fluor_data['Analyte'][n])
                  for n in range(self.fluor_data.shape[0])]
             )
-            copy.deepcopy(self.fluor_data['Analyte']).to_numpy()
         elif self.subclass_split is False:
             self.y = copy.deepcopy(self.fluor_data['Analyte']).to_numpy()
             self.groups = None
@@ -75,7 +76,8 @@ class RunML(DefData):
         index = [n for n in range(self.fluor_data.shape[0])]
         random.shuffle(index)
 
-        self.fluor_data['Analyte'] = self.fluor_data['Analyte'].iloc[index].tolist()
+        for col in self.drop_cols:
+            self.fluor_data[col] = self.fluor_data[col].iloc[index].tolist()
         self.y = self.y[index]
         if self.subclass_split is True:
             self.groups = self.groups[index]
@@ -188,7 +190,7 @@ class RunML(DefData):
 
         self.train_data = self.fluor_data.iloc[train_set].reset_index(drop=True)
         self.test_data = self.fluor_data.iloc[test_set].reset_index(drop=True)
-        self.features = self.train_data.drop('Analyte', axis=1).columns.tolist()
+        self.features = self.train_data.drop(self.drop_cols, axis=1).columns.tolist()
 
         self.train_x = self.x[train_set]
         self.test_x = self.x[test_set]
@@ -217,7 +219,7 @@ class RunML(DefData):
         coefficient values for all pairwise combinations of features
         """
 
-        feature_corr_df = train_data.drop('Analyte', axis=1)  # Must be a
+        feature_corr_df = train_data.drop(self.drop_cols, axis=1)  # Must be a
         # dataframe, not a numpy array
         correlation_matrix = feature_corr_df.corr(method='spearman')
 
@@ -308,6 +310,10 @@ class RunML(DefData):
         --------
         - x_tain: Numpy array of x values of training data
         - features: List of feature (barrel) names
+
+        Output
+        --------
+        - model: PCA model fitted to x_train
         """
 
         from sklearn.decomposition import PCA
@@ -327,6 +333,8 @@ class RunML(DefData):
         plt.yticks(rotation='horizontal')
         plt.savefig('{}/PCA_scree_plot.svg'.format(self.results_dir))
         plt.show()
+
+        return model
 
     def define_fixed_model_params(self, clf):
         """
@@ -735,19 +743,26 @@ class RunML(DefData):
 
         # Below ensures that predicted and true labels are on the correct axes,
         # so think carefully before updating!
-        plt.clf()
-        labels = unique_labels(y_test, predictions)
-        sns.heatmap(
-            data=confusion_matrix(y_true=y_test, y_pred=predictions, labels=labels),
-            cmap='RdBu_r', annot=True, xticklabels=True, yticklabels=True
-        )
-        ax = plt.gca()
-        ax.set(xticklabels=labels, yticklabels=labels, xlabel='Predicted label',
-               ylabel='True label')
-        plt.xticks(rotation='vertical')
-        plt.yticks(rotation='horizontal')
-        plt.savefig('{}/{}_confusion_matrix.svg'.format(self.results_dir, type(clf).__name__))
-        plt.show()
+        normalisation_methods = OrderedDict({None: '',
+                                             'true': '_recall',
+                                             'pred': '_precision'})
+        for method, method_label in normalisation_methods.items():
+            plt.clf()
+            labels = unique_labels(y_test, predictions)
+            sns.heatmap(
+                data=confusion_matrix(y_true=y_test, y_pred=predictions,
+                                      labels=labels, normalize=method),
+                cmap='RdBu_r', annot=True, xticklabels=True, yticklabels=True
+            )
+            ax = plt.gca()
+            ax.set(xticklabels=labels, yticklabels=labels, xlabel='Predicted label',
+                   ylabel='True label')
+            plt.xticks(rotation='vertical')
+            plt.yticks(rotation='horizontal')
+            plt.savefig('{}/{}{}_confusion_matrix.svg'.format(
+                self.results_dir, type(clf).__name__, method_label
+            ))
+            plt.show()
 
         return predictions, test_scores
 
@@ -961,7 +976,7 @@ class RunML(DefData):
             return search
 
         elif run == 'train':
-            params = fixed_params + tuned_params
+            params = {**fixed_params, **tuned_params}
             clf = clf(**params)
             search, train_scores, test_scores, predictions = self.run_algorithm(
                 clf, x_train, y_train, train_groups, x_test, y_test,
