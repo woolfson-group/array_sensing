@@ -747,6 +747,7 @@ class RunML(DefData):
                                              'true': '_recall',
                                              'pred': '_precision'})
         for method, method_label in normalisation_methods.items():
+            print(method)
             plt.clf()
             labels = unique_labels(y_test, predictions)
             sns.heatmap(
