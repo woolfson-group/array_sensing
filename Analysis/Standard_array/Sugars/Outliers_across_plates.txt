@@ -1,1 +1,1 @@
-a-glu, 5 (flagged readings = GRP22: 0.267674176007497, GRP46: 0.43288129594632097, Hept: 0.22617613515901835)
+gluhcl, 2 (flagged readings = GRP46: 0.17476258673804612)
