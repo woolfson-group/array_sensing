@@ -1,0 +1,39 @@
+Outliers across merged plates identified by generalised ESD test:
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_1.xlsx: N_24D_12_1 0.0019160951996772882
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_1.xlsx: N_24E_13_3 0.0018071318400515665
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_1.xlsx: Ol_GRP51_4_0 0.01194139898698468
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_1.xlsx: B_GRP51_4_0 0.18917747577624366
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_1.xlsx: B_24D_4_1 0.15102124183006538
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_1.xlsx: DD_Hex_9_19 0.14388604353393086
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_2.xlsx: DD_24E_5_1 0.17153885817410985
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_3.xlsx: N_GRP22_1_2 0.007735649358734907
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/F_G_M_P_S_repeat_4.xlsx: P_24K_14_23 0.005638702370358385
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_4.xlsx: Ol_GRP46_11_0 1.1022895125553909
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_4.xlsx: B_Hex2_10_5 0.06348338241480855
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_4.xlsx: DD_GRP46_3_20 0.5720136518771333
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/F_G_M_P_S_repeat_5.xlsx: P_GRP52_5_0 0.0005322134272609394
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/F_G_M_P_S_repeat_5.xlsx: P_Hept_3_1 0.05369388738555059
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_5.xlsx: Ol_GRP22_9_16 0.0013624678663239076
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_5.xlsx: Ol_GRP46_11_20 0.6564417177914113
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_5.xlsx: Ol_GRP51_12_20 0.011318619128466309
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_5.xlsx: Ol_Pent_8_21 0.011573714463259291
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_5.xlsx: DD_GRP46_11_2 5.801392301392301
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_6.xlsx: N_GRP52_13_20 0.01784638366737209
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_6.xlsx: Ol_17K_7_17 0.03988603988603984
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/F_G_M_P_S_repeat_6.xlsx: P_GRP52_13_12 0.002164407307857115
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_6.xlsx: B_GRP51_4_10 0.3323987663716105
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_6.xlsx: B_GRP52_5_10 0.3499789551217972
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_6.xlsx: B_GRP63_6_10 0.32878953588879667
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_6.xlsx: B_Pent_0_11 0.33189080318989683
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_6.xlsx: B_Hept_3_11 0.2505419498476681
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_6.xlsx: B_24D_4_11 0.35923461227068987
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_6.xlsx: B_24E_5_11 0.3018691281781749
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_6.xlsx: B_24K_6_11 0.3534386809545996
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_6.xlsx: B_17K_7_11 0.32305194805194803
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_7.xlsx: Ol_Pent_8_11 0.001892928830957645
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_8.xlsx: Ol_GRP52_13_0 0.00013560439677314656
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/A_L_N_Ol_Pol_repeat_8.xlsx: Ol_GRP80_15_4 0.34687889273356404
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_8.xlsx: B_GRP52_13_6 0.020410922601824866
+/Users/ks17361/Lab_work_Dek_Woolfson/BADASS/array_sensing/Small_molecules/FAs/Reformatted_FA_csvs/B_D_DD_H_O_repeat_8.xlsx: B_GRP80_15_0 0.10642945329070264
+
+ Outliers within classes identified by generalised ESD test:
