@@ -14,3 +14,7 @@ class NaNFluorescenceError(Exception):
 
 class MinMaxFluorescenceError(Exception):
     pass
+
+
+class AlgorithmError(Exception):
+    pass

@@ -254,18 +254,23 @@ def highlight_yellow(input_df):
     return 'background-color: yellow'
 
 
-def highlight_outliers_and_calc_median(
-    plate_df, raw_plate_data, plate_outliers, stage, alpha=0.05,
-    raise_warning=True
+def highlight_outliers(
+    plate_df, remove_outliers, highlight_outliers, raw_plate_data={},
+    plate_outliers={}, stage='', alpha=0.05
 ):
     """
-    Calculates the median of each column in a dataframe (ignoring data points
-    identified as outliers by a generalised ESD test)
-    http://finzi.psych.upenn.edu/R/library/EnvStats/html/rosnerTest.html
+    For each column in an input dataframe, highlights data points identified as
+    outliers by a generalised ESD test
+    (http://finzi.psych.upenn.edu/R/library/EnvStats/html/rosnerTest.html).
 
     Input
     ----------
     - plate_df: DataFrame of input fluorescence readings
+    - remove_outliers: Boolean, if set to True will discard outliers identified
+    via the generalised ESD test.
+    - highlight_outliers: Boolean, dictates whether to apply a styler to the
+    input dataframe to highlight the outlier readings. If set to True,
+    raw_plate_data and plate_outliers must be defined.
     - raw_plate_data: Dictionary of dataframes of fluorescence readings directly
     parsed from the input plate data (= values), labelled by their corresponding
     file paths (= keys)
@@ -274,16 +279,14 @@ def highlight_outliers_and_calc_median(
     outlier reading on that plate (= keys)
     - stage: Integer defining whether this function is being run to calculate
     the median of readings on the same plate (stage=1) or across different
-    plates (stage=2). Must be equal to either 1 or 2.
+    plates (stage=2). Must be equal to either 1 or 2, unless highlight_outliers
+    is set to False.
     - alpha: Significance level for the generalised ESD test, default 0.05
-    - raise_warning: Boolean that raises an error if a median value is
-    calculated to be NaN. By default is set to True.
 
     Output
     ----------
-    - median_df: DataFrame of the median fluorescence value (calculated
-    excluding any outlier values) of each column of fluoresence readings in the
-    input dataframe
+    - plate_df: DataFrame of input fluorescence readings, with identified
+    outliers set to NaN if remove_outliers set to True.
     - raw_plate_data: Dictionary of dataframes of fluorescence readings directly
     parsed from the input plate data (=values), labelled by their corresponding
     file paths (=keys), updated now to highlight any outliers in the input
@@ -297,11 +300,11 @@ def highlight_outliers_and_calc_median(
     import math
     from scipy import stats
 
+    plate_df = plate_df.reset_index(drop=True)
+
     features = [feature for feature in plate_df.columns if feature not in
                 ['Plate', 'Analyte'] and not feature.endswith('_loc')]
-    drop_columns = [feature for feature in plate_df.columns
-                    if feature not in features]
-    for feature in features:
+    for f_index, feature in enumerate(features):
         if set(pd.isnull(plate_df[feature])) == {True}:
             continue
 
@@ -333,40 +336,65 @@ def highlight_outliers_and_calc_median(
 
             if g_calculated > g_critical:
                 feature_array[max_index] = np.nan
-                #plate_df[feature][max_index] = np.nan  # Uncomment if want to
-                # remove outliers from median calculation. Currently haven't
-                # done this because median value is pretty resistant to
-                # outliers, and in the case where there are enough "outliers" to
-                # affect the median value, these "outliers" will not actually be
-                # flagged as such by the generalised ESD test
+                if remove_outliers is True:
+                    analyte = plate_df['Analyte'][max_index]
+                    if not max_index in plate_outliers:
+                        plate_outliers[max_index] = {}
+                    plate_outliers[max_index]['{}_{}'.format(analyte, feature)] = max_val
                 k += 1
 
-                plate_name = plate_df['Plate'][max_index]
-                analyte = plate_df['Analyte'][max_index]
-                raw_data_loc = plate_df['{}_loc'.format(feature)][max_index]
-                r = raw_data_loc[0]
-                c = raw_plate_data[plate_name].columns.tolist()[raw_data_loc[1]]
+                if highlight_outliers is True:
+                    plate_name = plate_df['Plate'][max_index]
+                    analyte = plate_df['Analyte'][max_index]
+                    raw_data_loc = plate_df['{}_loc'.format(feature)][max_index]
+                    r = raw_data_loc[0]
+                    c = raw_plate_data[plate_name].columns.tolist()[raw_data_loc[1]]
 
-                if not plate_name in list(plate_outliers.keys()):
-                    plate_outliers[plate_name] = {}
-                plate_outliers[plate_name]['{}_{}_{}_{}'.format(
-                    analyte, feature, raw_data_loc[0], raw_data_loc[1]
-                )] = max_val
+                    if not plate_name in list(plate_outliers.keys()):
+                        plate_outliers[plate_name] = {}
+                    plate_outliers[plate_name]['{}_{}_{}_{}'.format(
+                        analyte, feature, raw_data_loc[0], raw_data_loc[1]
+                    )] = max_val
 
-                if stage == 1:
-                    raw_plate_data[plate_name].applymap(
-                        color_val_red, subset=pd.IndexSlice[r, [c]]
-                    )
-                elif stage == 2:
-                    raw_plate_data[plate_name].applymap(
-                        highlight_yellow, subset=pd.IndexSlice[r, [c]]
-                    )
-                else:
-                    raise ValueError('Inappropriate value provided for '
-                                     'stage variable - should be set equal '
-                                     'to 1 or 2')
+                    if stage == 1:
+                        raw_plate_data[plate_name].applymap(
+                            color_val_red, subset=pd.IndexSlice[r, [c]]
+                        )
+                    elif stage == 2:
+                        raw_plate_data[plate_name].applymap(
+                            highlight_yellow, subset=pd.IndexSlice[r, [c]]
+                        )
+                    else:
+                        raise ValueError('Inappropriate value provided for '
+                                         'stage variable - should be set equal '
+                                         'to 1 or 2')
             else:
                 break
+
+    return plate_df, raw_plate_data, plate_outliers
+
+
+def calc_median(plate_df, raise_warning):
+    """
+    For each column in an input dataframe, calculates the median value.
+
+    Input
+    --------
+    - plate_df: DataFrame of input fluorescence readings
+    - raise_warning: Boolean that raises an error if a median value is
+    calculated to be NaN. By default is set to True.
+
+    Output
+    --------
+    - median_df: DataFrame of the median fluorescence value (calculated
+    excluding any outlier values) of each column of fluoresence readings in the
+    input dataframe
+    """
+
+    features = [feature for feature in plate_df.columns if feature not in
+                ['Plate', 'Analyte'] and not feature.endswith('_loc')]
+    drop_columns = [feature for feature in plate_df.columns
+                    if feature not in features]
 
     median_df = plate_df.drop(drop_columns, axis=1)
     median_df = median_df.median(axis=0, skipna=True).to_frame().transpose()
@@ -383,7 +411,7 @@ def highlight_outliers_and_calc_median(
                 'NaN. \033[0m'.format(nan_features)
             )
 
-    return median_df, raw_plate_data, plate_outliers
+    return median_df
 
 
 def scale_min_max(
@@ -428,9 +456,11 @@ def scale_min_max(
     except KeyError:
         raise PlateLayoutError('No blank readings (= peptide + fluorophore '
                                'without analyte) included on plate')
-    blank_data, _, plate_outliers = highlight_outliers_and_calc_median(
-        blank_data, raw_plate_data, plate_outliers, stage=1, raise_warning=True
+    blank_data, _, plate_outliers = highlight_outliers(
+        blank_data, remove_outliers=False, highlight_outliers=True,
+        raw_plate_data=raw_plate_data, plate_outliers=plate_outliers, stage=1
     )
+    blank_data = calc_median(blank_data, raise_warning=True)
 
     scaled_plate = {}
     analytes = [analyte for analyte in list(plate.keys()) if analyte != 'blank']
@@ -442,10 +472,11 @@ def scale_min_max(
         # work for any NaN median values, but these will be dealt with at a
         # later stage (when readings from the same repeat are combined across
         # plates)
-        median_fluor_data, raw_plate_data, plate_outliers = highlight_outliers_and_calc_median(
-            fluor_data, raw_plate_data, plate_outliers, stage=1,
-            raise_warning=False
+        fluor_data, raw_plate_data, plate_outliers = highlight_outliers(
+            fluor_data, remove_outliers=False, highlight_outliers=True,
+            raw_plate_data=raw_plate_data, plate_outliers=plate_outliers, stage=1
         )
+        median_fluor_data = calc_median(fluor_data, raise_warning=False)
         min_fluor_analyte = median_fluor_data[no_pep][0]
         for peptide in list(median_fluor_data.columns):
             if peptide != no_pep and not peptide in cols_ignore:
@@ -719,9 +750,14 @@ class ParseArrayData(DefData):
                 for loc, outlier in outliers[plate_path].items():
                     f.write('{}: {} {}\n'.format(plate_path, loc, outlier))
 
-    def combine_plate_readings(self):
+    def combine_plate_readings(self, outlier_excl_thresh=0.05, drop_thresh=2):
         """
         Combines independent measurements into a single array
+
+        Input
+        --------
+        outlier_excl_thresh:
+        drop_thresh:
         """
 
         ml_fluor_data = []
@@ -744,21 +780,52 @@ class ParseArrayData(DefData):
                         analyte_dfs.append(copy.deepcopy(plate[analyte]))
 
                 analyte_df = pd.concat(analyte_dfs, axis=0).reset_index(drop=True)
-                scaled_merged_data, raw_plate_data, outliers = highlight_outliers_and_calc_median(
-                    analyte_df, raw_plate_data, outliers, stage=2, raise_warning=True
+                scaled_data, raw_plate_data, outliers = highlight_outliers(
+                    analyte_df, remove_outliers=False, highlight_outliers=True,
+                    raw_plate_data=raw_plate_data, plate_outliers=outliers, stage=2
                 )
-
+                scaled_merged_data = calc_median(scaled_data, raise_warning=True)
                 ml_fluor_data.append(scaled_merged_data)
                 labels.append(analyte)
-
-        ml_fluor_df = pd.concat(ml_fluor_data, axis=0).reset_index(drop=True)
-        labels_df = pd.DataFrame({'Analyte': labels})
-        ml_fluor_df = pd.concat([ml_fluor_df, labels_df], axis=1).reset_index(drop=True)
-        self.ml_fluor_data = ml_fluor_df
-        self.cross_plate_outliers = raw_plate_data
 
         with open('{}/Outliers_across_plates.txt'.format(self.results_dir), 'w') as f:
             f.write('Outliers across merged plates identified by generalised ESD test:\n')
             for plate in list(outliers.keys()):
                 for loc, outlier in outliers[plate].items():
                     f.write('{}: {} {}\n'.format(plate, loc, outlier))
+            f.write('\n Outliers within classes identified by generalised ESD test:\n')
+
+        orig_fluor_df = pd.concat(ml_fluor_data, axis=0).reset_index(drop=True)
+        orig_labels_df = pd.DataFrame({'Analyte': labels})
+        orig_fluor_df = pd.concat(
+            [orig_fluor_df, orig_labels_df], axis=1
+        ).reset_index(drop=True)
+        excl_outliers_dfs = []
+        for analyte in set(labels):
+            analyte_indices = [i for i, val in enumerate(labels) if val == analyte]
+            analyte_df = orig_fluor_df.iloc[analyte_indices].reset_index(drop=True)
+            analyte_df, _, outlier_dict = highlight_outliers(
+                analyte_df, remove_outliers=True, highlight_outliers=False,
+                raw_plate_data={}, plate_outliers={}, alpha=outlier_excl_thresh
+            )
+            # Drops samples with more than drop_thresh outlier readings from the
+            # analysis
+            drop_indices = []
+            for index, outlier_ids in outlier_dict.items():
+                if len(outlier_ids) >= drop_thresh:
+                    drop_indices.append(index)
+                    outlier_vals = ['{}: {}'.format(outlier_id.split('_')[-1], val)
+                                    for outlier_id, val in outlier_ids.items()]
+                    print('\x1b[31m Outlier excluded from final output '
+                          'dataset: {}, {} (flagged readings = {}) \033[0m'.format(
+                          analyte, index, ', '.join(outlier_vals)))
+                    with open('{}/Outliers_across_plates.txt'.format(self.results_dir), 'w') as f:
+                        f.write('{}, {} (flagged readings = {})'.format(
+                            analyte, index, ', '.join(outlier_vals)))
+            analyte_df = analyte_df.drop(drop_indices, axis=0).reset_index(drop=True)
+            excl_outliers_dfs.append(analyte_df)
+        ml_fluor_df = pd.concat(excl_outliers_dfs, axis=0).reset_index(drop=True)
+
+        self.orig_fluor_data = orig_fluor_df
+        self.ml_fluor_data = ml_fluor_df
+        self.cross_plate_outliers = raw_plate_data

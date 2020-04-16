@@ -1,4 +1,5 @@
 
+import shutil
 import unittest
 
 
@@ -45,15 +46,17 @@ class TestClass(unittest.TestCase):
         fluor_data.group_xlsx_repeats()
         if test == 'Test_4':
             with self.assertRaises(NaNFluorescenceError): fluor_data.xlsx_to_scaled_df('No Pep')
+            shutil.rmtree(results_dir)
             return
         else:
             fluor_data.xlsx_to_scaled_df('No Pep')
         if test == 'Test_3':
             with self.assertRaises(NaNFluorescenceError): fluor_data.combine_plate_readings()
+            shutil.rmtree(results_dir)
             return
         else:
             fluor_data.combine_plate_readings()
-        parsed_data = fluor_data.ml_fluor_data.set_index('Analyte')
+        parsed_data = fluor_data.orig_fluor_data.set_index('Analyte')
 
         analytes = sorted([
             tea for tea in ['Black Clipper', 'Black Diplomat', 'Green DoubleDragon',

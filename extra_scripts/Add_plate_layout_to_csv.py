@@ -4,14 +4,14 @@ import os
 import shutil
 import numpy as np
 
-peptide_layout = np.array([['No Pep', 'CCPent', 'QLKEIA', 'CCHex2-I24K', 'CCHept-I24N', 'CCHept-L28W'],
-                           ['GRP22', 'CCHex', 'NLKEIA', 'CCHept-L28K', 'CCHept-I24T', 'CCHept-L7Y'],
-                           ['GRP35', 'CCHex2', 'CCHept-I17G-L21G', 'CCHept-I17H', 'CCHept-I24H', 'CCHept-L28Y'],
-                           ['GRP46', 'CCHept', 'CCHept-I17A-L21A', 'CCHept-I17K-L24E', 'CCHept-L21S-I24S', 'CCHept-I24Y'],
-                           ['GRP51', 'CCHept-I24D', 'CCHept-L14A', 'CCHept-L7K', 'CCHept-L21N-I24N', 'CCHept-L21S-I24Y'],
-                           ['GRP52', 'CCHept-I24E', 'CCHept-L21A', 'CCHept-L21K-I24E', 'CCHept-L21T-I24T', 'CCHept-L21Y-I24S'],
-                           ['GRP63', 'CCHept-I24K', 'CCHept-L21K', 'CCHept-L21E-I24K', 'CCHept-L21H-I24H', 'CCHept-I17T'],
-                           ['GRP80', 'CCHept-I17K', 'CCPent-I24K', 'CCHept-I24S', 'CCHept-L7W', 'CCHept-I24P']])
+peptide_layout = np.array([['No Pep', 'Pent'],
+                           ['GRP22', 'Hex'],
+                           ['GRP35', 'Hex2'],
+                           ['GRP46', 'Hept'],
+                           ['GRP51', '24D'],
+                           ['GRP52', '24E'],
+                           ['GRP63', '24K'],
+                           ['GRP80', '17K']])
 
 input_dir = input('Specify input directory:\n')
 new_dir = '{}/Reformatted_csvs/'.format(input_dir)
@@ -19,20 +19,33 @@ if os.path.isdir(new_dir):
     shutil.rmtree(new_dir)
 os.mkdir(new_dir)
 
+repeat_conv = {'190417': 'repeat_1',
+               '190424': 'repeat_2',
+               '190429': 'repeat_3',
+               '190510': 'repeat_4',
+               '190515': 'repeat_5',
+               '190517': 'repeat_6'}
+
 for csv in os.listdir(input_dir):
     if csv.endswith('.xlsx') and not 'plate_layout' in csv.lower():
-        analyte = csv.split('_')[1]
+        date = csv.split('_')[0]
+        csv_split = csv.split('_')[1:]
+        analyte = '_'.join([section[0:1].upper() + section[1:].lower() for section in csv_split]).replace('.xlsx', '')
 
-        plate_layout = np.array([['', '1:6', '7:12', '13:18', '19:24'],
-                                 ['A:H', analyte, 'Blank', analyte, 'Blank'],
-                                 ['I:P', 'Blank', analyte, 'Blank', analyte]])
+        plate_layout = np.array([['', '1:2', '3:4', '5:6', '7:8', '9:10', '11:12', '13:14', '15:16', '17:18', '19:20', '21:22', '23:24'],
+                                 ['A:H', analyte, analyte, analyte, 'Blank', analyte, analyte, analyte, 'Blank', analyte, analyte, analyte, analyte],
+                                 ['I:P', analyte, analyte, analyte, 'Blank', analyte, analyte, analyte, 'Blank', analyte, analyte, analyte, analyte]])
 
-        new_csv = '{}/{}'.format(new_dir, '_'.join(csv.split('_')[1:]))
+        new_csv = '{}/{}_{}.xlsx'.format(new_dir, analyte, repeat_conv[date])
         print('Saving {}'.format(new_csv))
         if os.path.isfile(new_csv):
             raise Exception('{} already exists'.format(new_csv))
 
-        orig_sheet = openpyxl.load_workbook(filename='{}/{}'.format(input_dir, csv))['End point']
+        if date == '190429':
+            orig_sheet_name = 'End point_1'
+        else:
+            orig_sheet_name = 'End point'
+        orig_sheet = openpyxl.load_workbook(filename='{}/{}'.format(input_dir, csv))[orig_sheet_name]
 
         workbook = openpyxl.Workbook()
         # Copies End point worksheet from original csv file
