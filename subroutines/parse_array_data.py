@@ -542,7 +542,7 @@ class DefData():
         """
 
         if not os.path.isdir(results_dir):
-            os.mkdir(results_dir)
+            os.makedirs(results_dir)
         else:
             print('Directory {} already found in {}'.format(results_dir, os.getcwd()))
             remove = ''
