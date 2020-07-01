@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from collections import OrderedDict
+from sklearn.base import BaseEstimator, TransformerMixin
 
 sns.set()
 
@@ -18,6 +19,30 @@ if __name__ == 'subroutines.train':
 else:
     from array_sensing.subroutines.parse_array_data import DefData
     from array_sensing.subroutines.exceptions import AlgorithmError
+
+class ManualFeatureSelection(BaseEstimator, TransformerMixin):
+    """
+    """
+
+    def __init__(self, all_features, selected_features):
+        """
+        """
+
+        self.all_features = all_features
+        self.selected_features = selected_features
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, y=None):
+        """
+        """
+
+        df = pd.DataFrame(data=X, index=None, columns=self.all_features)
+        sub_df = df[self.selected_features]
+        X = sub_df.to_numpy()
+
+        return X
 
 
 class RunML(DefData):
@@ -34,13 +59,13 @@ class RunML(DefData):
         from parse_array_data class)
         - classes: Numpy array / list defining class labels associated with the
         samples, e.g. for analysis of tea types an example list would be
-        ["Green", "Green", "Black", "Black", "Grey", "Grey"].
-        If not defined, code will select the column labelled "Analyte" in the
+        ['Green', 'Green', 'Black', 'Black', 'Grey', 'Grey'].
+        If not defined, code will select the column labelled 'Analyte' in the
         fluor_data DataFrame.
         - subclasses: Numpy array / list defining subclass labels associated
         with the samples (if such subclass labels exist), e.g. for analysis of
-        tea types an example list would be ["Green_Tetleys", "Green_Pukka",
-        "Black_Yorkshire", "Black_Yorkshire", "Grey_Asda", "Grey_Pukka"]
+        tea types an example list would be ['Green_Tetleys', 'Green_Pukka',
+        'Black_Yorkshire', 'Black_Yorkshire', 'Grey_Asda', 'Grey_Pukka']
         - shuffle: Boolean. If set to True, will randomly shuffle the input data
         """
 
@@ -61,8 +86,8 @@ class RunML(DefData):
         else:
             self.subclass_split = True
 
-        # Checks that, if defined, classes and subclasses arguments are numpy
-        # arrays, and randomly shuffles the data if shuffle set to True.
+        # Ensures that no columns in the input dataframe will be overwritten
+        # when 'Classes' and 'Subclasses' columns are subsequently appended
         if any(x in fluor_data.columns for x in ['Classes', 'Subclasses']):
             raise NameError(
                 'Please rename any columns in input dataframe labelled either '
@@ -74,6 +99,8 @@ class RunML(DefData):
                       'Subclasses': subclasses}
         fluor_data = fluor_data.reset_index(drop=True)
 
+        # Checks that, if defined, classes and subclasses arguments are numpy
+        # arrays, and randomly shuffles the data if shuffle set to True.
         for class_name, class_list in class_dict.items():
             error = False
 
@@ -110,9 +137,10 @@ class RunML(DefData):
             fluor_data = fluor_data.drop(['Subclasses'], axis=1)
         self.fluor_data = fluor_data
 
-        # Defines "x", "y" and "groups" variables for ML with sklearn
+        # Defines 'x', 'y' and 'groups' variables for ML with sklearn
         self.drop_cols = [col for col in self.fluor_data.columns
                           if 'analyte' in col.lower()]
+        self.features = self.fluor_data.drop(self.drop_cols, axis=1).columns.tolist()
         self.x = copy.deepcopy(self.fluor_data.drop(self.drop_cols, axis=1)).to_numpy()
         if not self.classes is None:
             self.y = copy.deepcopy(self.classes)
@@ -135,15 +163,20 @@ class RunML(DefData):
         if self.subclass_split is True:
             self.groups = self.groups[index]
 
-    def randomly_pick_subclasses(self, percent_test):
+    def randomly_pick_subclasses(self, one_of_each, percent_test):
         """
         Randomly selects subclasses to be saved as test set.
-        N.B. Requires equal class sizes
 
         Input
         --------
-        - percent_test: The percentage of the total classes to include in each
-        subset
+        - one_of_each: Boolean, determines whether test set includes one or more
+        subclass of each class (True), or one or more subclass(es) selected at
+        random (False). N.B. If set to True, number of subclasses in each class
+        must be equal.
+        - percent_test: The percentage of the data to be set aside as a test
+        set. Must be a multiple of either the total number of subclasses
+        (one_of_each = False), or the number of subclasses in each class
+        (one_of_each = True)
 
         Output
         --------
@@ -156,56 +189,78 @@ class RunML(DefData):
                 'Inappropriate data format for this function. You need to '
                 'define the classes argument when initialising a run_ml object.'
             )
+        if percent_test < 0 or percent_test > 1:
+            raise ValueError('percent_test should be a float between 0 and 1')
 
         subclasses = list(self.groups)
         classes = list(self.y)
         set_subclasses = list(set(subclasses))
         set_classes = list(set(classes))
 
-        # Checks for equal class sizes
-        organised_classes = {}
-        for n in range(len(classes)):
-            class_val = classes[n]
-            subclass_val = subclasses[n]
-            if not class_val in organised_classes:
-                organised_classes[class_val] = []
-            if not subclass_val in organised_classes[class_val]:
-                organised_classes[class_val].append(subclass_val)
+        # Random split
+        if one_of_each is False:
+            # Checks that percent_test is a multiple of the total number of
+            # subclasses
+            if len(set_subclasses) % (1/percent_test) != 0:
+                raise ValueError(
+                    'percent_test is not a multiple of the total number of '
+                    'subclasses'
+                )
 
-        class_lens = [len(organised_classes[class_val])
-                      for class_val in organised_classes.keys()]
+            test_classes = []
+            random_classes = copy.deepcopy(set_subclasses)
+            random.shuffle(random_classes)
+            frac = int(len(set_subclasses)*percent_test)
+            for n in range(int(1/percent_test)):
+                test_classes.append(random_classes[n*frac:(n+1)*frac])
 
-        if len(set(class_lens)) != 1:
-            raise RuntimeError(
-                'Class sizes are unequal:\n{}\nPlease update your input '
-                'dataset to contain equal class sizes'
-            )
+        # Stratified class split
+        elif one_of_each is True:
+            # Checks for equal class sizes
+            organised_classes = {}
+            for n in range(len(classes)):
+                class_val = classes[n]
+                subclass_val = subclasses[n]
+                if not class_val in organised_classes:
+                    organised_classes[class_val] = []
+                if not subclass_val in organised_classes[class_val]:
+                    organised_classes[class_val].append(subclass_val)
 
-        # Creates list of subclass train test splits
-        for class_val in organised_classes.keys():
-            random.shuffle(organised_classes[class_val])
+            class_lens = [len(organised_classes[class_val])
+                          for class_val in organised_classes.keys()]
 
-        sub_class_array = np.array(list(organised_classes.values())).transpose()
+            if len(set(class_lens)) != 1:
+                raise RuntimeError(
+                    'Class sizes are unequal:\n{}\nPlease update your input '
+                    'dataset to contain equal class sizes'
+                )
 
-        num_test = sub_class_array.shape[0]*percent_test
-        if (sub_class_array.shape[0] / num_test) % 1 != 0:
-            raise ValueError(
-                'Multiplying the class size by percent_test gives a non-integer'
-                ' value.\nPlease change the value of percent_test to allow '
-                'division of the classes into subsets of equal (integer!) size'
-            )
-        else:
-            num_test = int(num_test)  # range() requires integer values
+            # Creates list of subclass train test splits
+            for class_val in organised_classes.keys():
+                random.shuffle(organised_classes[class_val])
 
-        test_classes = [
-            sub_class_array[i:i+num_test,].flatten('C').tolist() for i in
-            [int(n) for n in range(0, sub_class_array.shape[0], num_test)]
-        ]
+            sub_class_array = np.array(list(organised_classes.values())).transpose()
+
+            num_test = sub_class_array.shape[0]*percent_test
+            if (sub_class_array.shape[0] / num_test) % 1 != 0:
+                raise ValueError(
+                    'Multiplying the class size by percent_test gives a '
+                    'non-integer value.\nPlease change the value of '
+                    'percent_test to allow division of the classes into subsets'
+                    ' of equal and integer size'
+                )
+            else:
+                num_test = int(num_test)  # range() requires integer values
+
+            test_classes = [
+                sub_class_array[i:i+num_test,].flatten('C').tolist() for i in
+                [int(n) for n in range(0, sub_class_array.shape[0], num_test)]
+            ]
 
         return test_classes
 
     def split_train_test_data(
-        self, randomise, percent_test, test_analytes
+        self, randomise, percent_test=None, test_analytes=None
     ):
         """
         Splits data into training and test set
@@ -228,12 +283,21 @@ class RunML(DefData):
 
         self.randomise = randomise
         if self.randomise is True:
-            n_splits = round(1 / percent_test)
-            skf = StratifiedKFold(n_splits=n_splits, shuffle=True)
-            splits = skf.split(X=self.x, y=self.y)
-            for split in splits:
-                train_set = list(split[0])
-                test_set = list(split[1])
+            if 0 < percent_test < 1:
+                n_splits = round(1 / percent_test)
+                skf = StratifiedKFold(n_splits=n_splits, shuffle=True)
+                splits = skf.split(X=self.x, y=self.y)
+                for split in splits:
+                    train_set = list(split[0])
+                    test_set = list(split[1])
+                    break
+            elif percent_test == 0:
+                train_set = list(range(0, self.x.shape[0]))
+                test_set = []
+            else:
+                raise ValueError('percent_test lies outside of the expected '
+                                 'range of 0 <= percent_test < 1')
+
 
         elif self.randomise is False:
             test_set = []
@@ -247,7 +311,6 @@ class RunML(DefData):
 
         self.train_data = self.fluor_data.iloc[train_set].reset_index(drop=True)
         self.test_data = self.fluor_data.iloc[test_set].reset_index(drop=True)
-        self.features = self.train_data.drop(self.drop_cols, axis=1).columns.tolist()
 
         self.train_x = self.x[train_set]
         self.test_x = self.x[test_set]
@@ -292,9 +355,7 @@ class RunML(DefData):
 
         return correlation_matrix
 
-    def calc_feature_importances_kbest(
-        self, x_train, y_train, features, method_classif
-    ):
+    def calc_feature_importances_kbest(self, x, y, method_classif):
         """
         Runs a univariate statistical test (either f_classif or
         mutual_info_classif) between x and y to calculate the importances of the
@@ -302,9 +363,8 @@ class RunML(DefData):
 
         Input
         --------
-        - x_train: Numpy array of x values of training data
-        - y_train: Numpy array of y values of training data
-        - features: List of feature (barrel) names
+        - x: Numpy array of x values
+        - y: Numpy array of y values
         - method_classif: Either 'f_classif' or 'mutual_info_classif'. From the
         scikit-learn docs - 'The methods based on F-test (f_classif) estimate
         the degree of linear dependency between two random variables. On the
@@ -320,14 +380,14 @@ class RunML(DefData):
         from sklearn.feature_selection import SelectKBest
 
         model = SelectKBest(score_func=method_classif, k='all')
-        model.fit(x_train, y_train)
+        model.fit(X=x, y=y)
         total_y = np.sum(model.scores_)
         norm_y = model.scores_ / total_y
 
         plt.clf()
-        barplot = sns.barplot(x=features, y=norm_y)
+        barplot = sns.barplot(x=self.features, y=norm_y)
         plt.xticks(
-            np.arange(len(features)), features, rotation='vertical'
+            np.arange(len(self.features)), self.features, rotation='vertical'
         )
         plt.savefig('{}/KBest_feature_importances_barplot.svg'.format(
             self.results_dir
@@ -340,7 +400,7 @@ class RunML(DefData):
             x=np.linspace(1, order.shape[0], order.shape[0]),
             y=np.cumsum(norm_y[order]), marker='o'
         )
-        labels = np.concatenate((np.array(['']), np.array(features)[order]), axis=0)
+        labels = np.concatenate((np.array(['']), np.array(self.features)[order]), axis=0)
         plt.xticks(
             np.arange(labels.shape[0]), labels, rotation='vertical'
         )
@@ -351,32 +411,64 @@ class RunML(DefData):
         ))
         plt.show()
 
-        score_df = pd.DataFrame({'Feature': features, 'Score': norm_y})
+        score_df = pd.DataFrame({'Feature': self.features, 'Score': norm_y})
         score_df = score_df.sort_values(
             by=['Score'], axis=0, ascending=False
         ).reset_index(drop=True)
 
         return score_df
 
-    def run_pca(self, x_train, features):
+    def calc_feature_importances_tree(self, x, y):
+        """
+        Input
+        --------
+        - x: Numpy array of x values
+        - y: Numpy array of y values
+
+        Output
+        --------
+        - feature_importances:
+        """
+
+        from sklearn.ensemble import ExtraTreesClassifier
+
+        model = ExtraTreesClassifier()
+        model.fit(X=x, y=y)
+        feature_importances = model.feature_importances_
+
+        plt.clf()
+        barplot = sns.barplot(x=self.features, y=feature_importances)
+        plt.xticks(
+            np.arange(len(self.features)), self.features, rotation='vertical'
+        )
+        plt.savefig('{}/Tree_feature_importances_barplot.svg'.format(
+            self.results_dir
+        ))
+        plt.show()
+
+        feat_importances_df = pd.DataFrame({'Feature': self.features,
+                                            'Score': feature_importances})
+
+        return feat_importances_df
+
+    def run_pca(self, x):
         """
         Runs Principal Component Analysis and makes scatter plot of number of
         components vs. amount of information captured
 
         Input
         --------
-        - x_tain: Numpy array of x values of training data
-        - features: List of feature (barrel) names
+        - x: Numpy array of x values
 
         Output
         --------
-        - model: PCA model fitted to x_train
+        - model: PCA model fitted to x values
         """
 
         from sklearn.decomposition import PCA
 
         model = PCA()
-        model.fit(x_train)
+        model.fit(x)
         max_num_components = len(model.explained_variance_ratio_)
 
         plt.clf()
@@ -395,7 +487,7 @@ class RunML(DefData):
 
     def define_fixed_model_params(self, clf):
         """
-        For the 6 default Ml algorithms run by this code (LogisticRegression,
+        For the 6 default ML algorithms run by this code (LogisticRegression,
         KNeighborsClassifier, GaussianNB, LinearSVC, SVC and
         RandomForestClassifier), defines a dictionary of hyperparameters and
         their corresponding values that will remain fixed throughout
@@ -420,8 +512,6 @@ class RunML(DefData):
             params = {'dual': False}  # Change back to True (= default) if
             # n_samples < n_features
         elif type(clf).__name__ == 'SVC':
-            # For speed reasons (some kernels take a prohibitively long time to
-            # train) am sticking with the default kernel ('rbf')
             params = {}
         elif type(clf).__name__ == 'RandomForestClassifier':
             params = {'n_jobs': -1}
@@ -430,9 +520,9 @@ class RunML(DefData):
 
         return params
 
-    def define_tuned_model_params(self, clf, x_train):
+    def define_tuned_model_params(self, clf, x_train, n_folds):
         """
-        For the 6 default Ml algorithms run by this code (LogisticRegression,
+        For the 6 default ML algorithms run by this code (LogisticRegression,
         KNeighborsClassifier, GaussianNB, LinearSVC, SVC and
         RandomForestClassifier), returns dictionary of a sensible range of
         values for variable hyperparameters to be tested in randomised / grid
@@ -443,6 +533,7 @@ class RunML(DefData):
         - clf: The selected ML algorithm,
         e.g. sklearn.ensemble.RandomForestClassifier()
         - x_train: Numpy array of x values of training data
+        - n_folds: The number of folds to be used in k-folds cross-validation
 
         Output
         --------
@@ -457,13 +548,12 @@ class RunML(DefData):
                       'multi_class': ['ovr', 'multinomial'],
                       'C': np.logspace(-3, 5, 17)}
         elif type(clf).__name__ == 'KNeighborsClassifier':
-            if int(0.2*shape) < 2:
+            if (1/n_folds)*shape < 2:
                 raise AlgorithmError(
                     'Too few data points in dataset to run k nearest neighbours'
-                    ' (assuming default 5-fold cross-validation)'
                 )
             else:
-                neighbours = np.array(range(2, int(shape*0.2) + 1, 1))
+                neighbours = np.array(range(2, int((1/n_folds)*shape), 1))
                 params = {'n_neighbors': neighbours,
                           'weights': ['uniform', 'distance'],
                           'p': np.array([1, 2])}
@@ -475,18 +565,20 @@ class RunML(DefData):
             params = {'C': np.logspace(-5, 15, num=41, base=2),
                       'gamma': np.logspace(-15, 3, num=37, base=2)}
         elif type(clf).__name__ == 'RandomForestClassifier':
-            if int(0.2*shape) < 2:
+            if (1/n_folds)*shape < 2:
                 raise AlgorithmError(
                     'Too few data points in dataset to use random forest '
-                    'classifier (assuming default 5-fold cross-validation)'
+                    'classifier'
                 )
             else:
                 n_estimators = [int(x) for x in np.logspace(1, 4, 7)]
                 min_samples_split = np.array([
-                    int(x) for x in np.linspace(2, int(0.2*shape), int(0.2*shape) - 1)
+                    int(x) for x in
+                    np.linspace(2, int((1/n_folds)*shape), int((1/n_folds)*shape) - 1)
                 ])
                 min_samples_leaf = np.array([
-                    int(x) for x in np.linspace(2, int(0.1*shape), int(0.1*shape) - 1)
+                    int(x) for x in
+                    np.linspace(2, int((1/n_folds)*0.5*shape), int((1/n_folds)*0.5*shape) - 1)
                 ])
                 params = {'n_estimators': n_estimators,
                           'min_samples_split': min_samples_split,
@@ -525,9 +617,33 @@ class RunML(DefData):
                         print('Range tested: {}'.format(poss_vals))
                         print('Value selected: {}'.format(best_val))
 
+    def conv_resampling_method(self, resampling_method):
+        """
+        """
+
+        from imblearn.over_sampling import RandomOverSampler, SMOTE
+        from imblearn.combine import SMOTEENN, SMOTETomek
+
+        if resampling_method == 'no_balancing':
+            resampling_obj = None
+        elif resampling_method == 'max_sampling':
+            resampling_obj = RandomOverSampler(sampling_strategy='not majority')
+        elif resampling_method == 'smote':
+            resampling_obj = SMOTE(sampling_strategy='not majority')
+        elif resampling_method == 'smoteenn':
+            resampling_obj = SMOTEENN(sampling_strategy='not majority')
+        elif resampling_method == 'smotetomek':
+            resampling_obj = SMOTETomek(sampling_strategy='not majority')
+        else:
+            raise ValueError(
+                'Resampling method {} not recognised'.format(resampling_method)
+            )
+
+        return resampling_obj
+
     def run_randomised_search(
-        self, x_train, y_train, train_groups, clf, splits, resampling_method,
-        n_components_pca, params, scoring_func, n_iter=''
+        self, x_train, y_train, train_groups, selected_features, clf, splits,
+        resampling_method, n_components_pca, params, scoring_func, n_iter=''
     ):
         """
         Randomly picks combinations of hyperparameters from an input grid and
@@ -540,15 +656,16 @@ class RunML(DefData):
         classifier with randomly selected combinations of input hyperparameter
         values. Note that incompatible combinations of hyperparameters will
         simply be skipped (error_score=np.nan), so there is no need to avoid
-        including e.g. hyperparameters that are defined if other hyperparameters
-        are defined as particular values. Returns the resuts of the randomised
-        search.
+        including e.g. hyperparameters that are defined only if other
+        hyperparameters are defined as particular values. Returns the resuts of
+        the randomised search.
 
         Input
         --------
         - x_train: Numpy array of x values of training data
         - y_train: Numpy array of y values of training data
         - train_groups: Numpy array of group names of training data
+        - selected_features:
         - clf: Selected classifier from the sklearn package,
         e.g. sklearn.ensemble.RandomForestClassifier(n_jobs=-1)
         - splits: Generator function that yields train: test splits of the input
@@ -556,7 +673,7 @@ class RunML(DefData):
         - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
-        - n_components_pca: The number of components to tranform the data to after
+        - n_components_pca: The number of components to transform the data to after
         fitting the data with PCA. If set to None, PCA will not be included in
         the pipeline.
         - params: Dictionary of hyperparameter values to search.
@@ -586,32 +703,40 @@ class RunML(DefData):
         from sklearn.model_selection import RandomizedSearchCV
 
         # Determines number of iterations to run. If this is not defined by the
-        # user, it is set to 0.1 * the total number of possible parameter value
-        # combinations, with a lower limit of 25. If the total number of
-        # possible parameter value combinations is less than 25, all parameter
+        # user, it is set to 1/3 * the total number of possible parameter value
+        # combinations, with a lower limit of 100. If the total number of
+        # possible parameter value combinations is less than 100, all parameter
         # value combinations are tested.
         num_params_combs = 1
         for val in params.values():
             if isinstance(val, (list, np.ndarray)):
                 num_params_combs *= len(val)
         if n_iter == '':
-            n_iter = int(num_params_combs*0.1)
-            if n_iter < 25:
-                n_iter = 25
+            n_iter = int(num_params_combs*(1/3))
+            if n_iter < 100:
+                n_iter = 100
         if n_iter > num_params_combs:
             n_iter = num_params_combs
 
+        # Generates resampling object
+        resampling_obj = self.conv_resampling_method(resampling_method=resampling_method)
+
         # Runs randomised search pipeline
+        feature_selection = ManualFeatureSelection(
+            all_features=self.features, selected_features=selected_features
+        )
         standardisation = StandardScaler()
         if n_components_pca is None:
-            std_pca_clf = std_pca_clf = Pipeline([('std', standardisation),
-                                    ('resampling', resampling_method),
+            std_pca_clf = Pipeline([('feature_selection', feature_selection),
+                                    ('std', standardisation),
+                                    ('resampling', resampling_obj),
                                     (type(clf).__name__, clf)])
         else:
             pca = PCA(n_components=n_components_pca)
-            std_pca_clf = Pipeline([('std', standardisation),
+            std_pca_clf = Pipeline([('feature_selection', feature_selection),
+                                    ('std', standardisation),
                                     ('PCA', pca),
-                                    ('resampling', resampling_method),
+                                    ('resampling', resampling_obj),
                                     (type(clf).__name__, clf)])
 
         params = {'{}__{}'.format(type(clf).__name__, key): val
@@ -623,17 +748,13 @@ class RunML(DefData):
         )
         random_search.fit(X=x_train, y=y_train, groups=train_groups)
 
-        print('Randomised search with cross-validation results:')
-        print('Best parameters: {}'.format(random_search.best_params_))
-        print('Best score: {}'.format(random_search.best_score_))
-
         self.flag_extreme_params(random_search.best_params_, params)
 
         return random_search
 
     def run_grid_search(
-        self, x_train, y_train, train_groups, clf, splits, resampling_method,
-        n_components_pca, params, scoring_func
+        self, x_train, y_train, train_groups, selected_features, clf, splits,
+        resampling_method, n_components_pca, params, scoring_func
     ):
         """
         Tests all possible combinations of hyperparameters from an input grid
@@ -646,8 +767,9 @@ class RunML(DefData):
         classifier with all possible combinations of input hyperparameter
         values. Note that incompatible combinations of hyperparameters will
         simply be skipped (error_score=np.nan), so there is no need to avoid
-        including e.g. hyperparameters that are defined if other hyperparameters
-        are defined as particular values. Returns the resuts of the grid search.
+        including e.g. hyperparameters that are defined only if other
+        hyperparameters are defined as particular values. Returns the results of
+        the grid search.
 
         Input
         --------
@@ -661,7 +783,7 @@ class RunML(DefData):
         - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
-        - n_components_pca: The number of components to tranform the data to after
+        - n_components_pca: The number of components to transform the data to after
         fitting the data with PCA. If set to None, PCA will not be included in
         the pipeline.
         - params: Dictionary of hyperparameter values to search.
@@ -686,16 +808,24 @@ class RunML(DefData):
         from sklearn.decomposition import PCA
         from sklearn.model_selection import GridSearchCV
 
+        # Generates resampling object
+        resampling_obj = self.conv_resampling_method(resampling_method=resampling_method)
+
+        feature_selection = ManualFeatureSelection(
+            all_features=self.features, selected_features=selected_features
+        )
         standardisation = StandardScaler()
         if n_components_pca is None:
-            std_pca_clf = Pipeline([('std', standardisation),
-                                    ('resampling', resampling_method),
+            std_pca_clf = Pipeline([('feature_selection', feature_selection),
+                                    ('std', standardisation),
+                                    ('resampling', resampling_obj),
                                     (type(clf).__name__, clf)])
         else:
             pca = PCA(n_components=n_components_pca)
-            std_pca_clf = Pipeline([('std', standardisation),
+            std_pca_clf = Pipeline([('feature_selection', feature_selection),
+                                    ('std', standardisation),
                                     ('PCA', pca),
-                                    ('resampling', resampling_method),
+                                    ('resampling', resampling_obj),
                                     (type(clf).__name__, clf)])
 
         params = {'{}__{}'.format(type(clf).__name__, key): val
@@ -707,26 +837,21 @@ class RunML(DefData):
         )
         grid_search.fit(X=x_train, y=y_train, groups=train_groups)
 
-        print('Grid search with cross-validation results:')
-        print('Best parameters: {}'.format(grid_search.best_params_))
-        print('Best score: {}'.format(grid_search.best_score_))
-
         self.flag_extreme_params(grid_search.best_params_, params)
 
         return grid_search
 
     def train_model(
-        self, x_train, y_train, train_groups, clf, splits, resampling_method,
-        n_components_pca, scoring_func
+        self, x_train, y_train, train_groups, selected_features, clf,
+        resampling_method, n_components_pca, scoring_func
     ):
         """
         Trains user-specified model on the training data (without cross-
-        validation). Also *separately* calculates how well the model fits the
-        training data via cross-validation. Training data is first standardised
-        (by subtracting the mean) and dividing by the standard deviation, then
-        transformed to a user-specified number of features with PCA, and finally
-        resampled if necessary to balance the class sizes, before it is fed into
-        the model for training.
+        validation). Training data is first standardised (by subtracting the
+        mean) and dividing by the standard deviation, then transformed to a
+        user-specified number of features with PCA, and finally resampled if
+        necessary to balance the class sizes, before it is fed into the model
+        for training.
 
         Input
         --------
@@ -735,12 +860,10 @@ class RunML(DefData):
         - train_groups: Numpy array of group names of training data
         - clf: Selected classifier from the sklearn package,
         e.g. sklearn.ensemble.RandomForestClassifier(n_jobs=-1)
-        - splits: Generator function that yields train: test splits of the input
-        data (x_train and y_train) for cross-validation
         - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
-        - n_components_pca: The number of components to tranform the data to
+        - n_components_pca: The number of components to transform the data to
         after fitting the data with PCA. If set to None, PCA will not be
         included in the pipeline.
         - scoring_func: The function used to score the fitted classifier on the
@@ -754,8 +877,6 @@ class RunML(DefData):
         - std_pca_clf: Model fitted to the training data. This can be fed into
         test_model to measure how well the model predicts the classes of the
         test data set aside by split_train_test_data.
-        - train_scores: The value of the selected scoring function calculated
-        from cross-validation of the model on the training data.
         """
 
         from imblearn.pipeline import Pipeline
@@ -763,29 +884,30 @@ class RunML(DefData):
         from sklearn.decomposition import PCA
         from sklearn.model_selection import cross_val_score
 
+        # Generates resampling object
+        resampling_obj = self.conv_resampling_method(resampling_method=resampling_method)
+
+        feature_selection = ManualFeatureSelection(
+            all_features=self.features, selected_features=selected_features
+        )
         standardisation = StandardScaler()
         if n_components_pca is None:
-            std_pca_clf = Pipeline([('std', standardisation),
-                                    ('resampling', resampling_method),
+            std_pca_clf = Pipeline([('feature_selection', feature_selection),
+                                    ('std', standardisation),
+                                    ('resampling', resampling_obj),
                                     (type(clf).__name__, clf)])
         else:
             pca = PCA(n_components=n_components_pca)
-            std_pca_clf = Pipeline([('std', standardisation),
+            std_pca_clf = Pipeline([('feature_selection', feature_selection),
+                                    ('std', standardisation),
                                     ('PCA', pca),
-                                    ('resampling', resampling_method),
+                                    ('resampling', resampling_obj),
                                     (type(clf).__name__, clf)])
 
         # Fits single model on all training data
         std_pca_clf.fit(X=x_train, y=y_train)
 
-        # Calculates cross-validation score
-        train_scores = cross_val_score(
-            estimator=std_pca_clf, X=x_train, y=y_train, groups=train_groups,
-            scoring=scoring_func, cv=splits, n_jobs=-1
-        )
-        print('Model cross-validation score: {}'.format(train_scores))
-
-        return std_pca_clf, train_scores
+        return std_pca_clf
 
     def test_model(
         self, x_test, y_test, clf, test_scoring_funcs, draw_conf_mat=True
@@ -833,17 +955,19 @@ class RunML(DefData):
                 params['y_true'] = y_test
                 params['y_pred'] = predictions
             test_score = func(**params)
-            test_scores[func.__name__] = test_score
-            print('{}: {}'.format(func.__name__, test_score))
+            test_scores[func.__name__.replace('_score', '')] = test_score
 
 
         # Generates confusion matrices
         if draw_conf_mat is True:
             normalisation_methods = OrderedDict({None: '',
-                                                 'true': '_recall',
-                                                 'pred': '_precision'})
+                                                 'true': ['_recall', 'rows'],
+                                                 'pred': ['_precision', 'columns']})
             for method, method_label in normalisation_methods.items():
-                print(method)
+                if method is not None:
+                    print('Normalised over {} label ({})'.format(
+                        method, method_label[1]
+                    ))
                 plt.clf()
                 labels = unique_labels(y_test, predictions)
                 # Below ensures that predicted and true labels are on the correct axes,
@@ -859,16 +983,16 @@ class RunML(DefData):
                 plt.xticks(rotation='vertical')
                 plt.yticks(rotation='horizontal')
                 plt.savefig('{}/{}{}_confusion_matrix.svg'.format(
-                    self.results_dir, type(clf).__name__, method_label
+                    self.results_dir, type(clf).__name__, method_label[0]
                 ))
                 plt.show()
 
         return predictions, test_scores
 
-    def run_algorithm(
+    def run_ml(
         self, clf, x_train, y_train, train_groups, x_test, y_test,
-        n_components_pca, run, params, train_scoring_func,
-        test_scoring_funcs=None, resampling_method=['no_balancing'], n_iter='',
+        selected_features, n_components_pca, run, params, train_scoring_func,
+        test_scoring_funcs=None, resampling_method='no_balancing', n_iter='',
         cv_folds=5, draw_conf_mat=True
     ):
         """
@@ -886,7 +1010,7 @@ class RunML(DefData):
         - train_groups: Numpy array of group names of training data
         - x_test: Numpy array of x values of test data
         - y_test: Numpy array of y values of test data
-        - n_components_pca: The number of components to tranform the data to
+        - n_components_pca: The number of components to transform the data to
         after fitting the data with PCA. If set to None, PCA will not be
         included in the pipeline.
         - run: Either 'randomsearch', 'gridsearch' or 'train'. Directs the
@@ -914,7 +1038,7 @@ class RunML(DefData):
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
         - n_iter: Integer number of hyperparameter combinations to test / ''. If
-        set to '' will be set to either 25 or 10% of the total number of
+        set to '' will be set to either 100 or 1/3 of the total number of
         possible combinations of hyperparameter values specified in the params
         dictionary (whichever is larger).
         - cv_folds: Integer number of folds to run in cross-validation. E.g. as
@@ -937,70 +1061,50 @@ class RunML(DefData):
         on the testing data
         """
 
-        from imblearn.over_sampling import RandomOverSampler, SMOTE
-        from imblearn.combine import SMOTEENN, SMOTETomek
         from sklearn.model_selection import StratifiedKFold
         from sklearn.model_selection import GroupKFold
 
-        searches = {}
-        train_scores = {}
-        test_scores = {}
-        predictions = np.array([])
-
-        for method in resampling_method:
-            if method == 'no_balancing':
-                resampling_obj = None
-            elif method == 'max_sampling':
-                resampling_obj = RandomOverSampler(sampling_strategy='not majority')
-            elif method == 'smote':
-                resampling_obj = SMOTE(sampling_strategy='not majority')
-            elif method == 'smoteenn':
-                resampling_obj = SMOTEENN(sampling_strategy='not majority')
-            elif method == 'smotetomek':
-                resampling_obj = SMOTETomek(sampling_strategy='not majority')
-            else:
-                raise ValueError('Resampling method {} not recognised'.format(method))
-
+        if run in ['randomsearch', 'gridsearch']:
+            skf = ''
+            gkf = ''
             if self.randomise is True:
                 # There must be more than cv_folds instances of each dataset
                 skf = StratifiedKFold(n_splits=cv_folds, shuffle=True)
                 splits = skf.split(X=x_train, y=y_train)
-
-            elif self.randomise is False:
+            else:
                 gkf = GroupKFold(n_splits=cv_folds)
                 splits = gkf.split(X=x_train, y=y_train, groups=train_groups)
+        else:
+            splits = ''
 
-            if run == 'randomsearch':
-                search = self.run_randomised_search(
-                    x_train, y_train, train_groups, clf, splits, resampling_obj,
-                    n_components_pca, params, train_scoring_func, n_iter
-                )
-                searches[method] = search
-            elif run == 'gridsearch':
-                search = self.run_grid_search(
-                    x_train, y_train, train_groups, clf, splits, resampling_obj,
-                    n_components_pca, params, train_scoring_func
-                )
-                searches[method] = search
-            elif run == 'train':
-                search, train_score_subset = self.train_model(
-                    x_train, y_train, train_groups, clf, splits, resampling_obj,
-                    n_components_pca, train_scoring_func
-                )
-                predictions, test_score_subset = self.test_model(
-                    x_test, y_test, search, test_scoring_funcs, draw_conf_mat
-                )
-                searches[method] = search
-                train_scores[method] = train_score_subset
-                test_scores[method] = test_score_subset
+        if run == 'randomsearch':
+            search = self.run_randomised_search(
+                x_train, y_train, train_groups, selected_features, clf, splits,
+                resampling_method, n_components_pca, params, train_scoring_func,
+                n_iter
+            )
+            return search
+        elif run == 'gridsearch':
+            search = self.run_grid_search(
+                x_train, y_train, train_groups, selected_features, clf, splits,
+                resampling_method, n_components_pca, params, train_scoring_func
+            )
+            return search
+        elif run == 'train':
+            search = self.train_model(
+                x_train, y_train, train_groups, selected_features, clf,
+                resampling_method, n_components_pca, train_scoring_func
+            )
+            predictions, test_scores = self.test_model(
+                x_test, y_test, search, test_scoring_funcs, draw_conf_mat
+            )
+            return search, test_scores, predictions
 
-        return searches, train_scores, test_scores, predictions
-
-    def run_ml(
-        self, clf, x_train, y_train, train_groups, x_test, y_test,
-        n_components_pca, run, fixed_params, tuned_params, train_scoring_func,
-        test_scoring_funcs=None, resampling_method=['no_balancing'], n_iter='',
-        cv_folds=5, draw_conf_mat=True
+    def run_nested_CV(
+        self, clf, x, y, groups, selected_features, n_components_pca, run,
+        fixed_params, tuned_params, train_scoring_func,
+        test_scoring_funcs=None, resampling_method='no_balancing', n_iter='',
+        cv_folds_inner_loop=5, cv_folds_outer_loop='loocv', draw_conf_mat=False
     ):
         """
         Fits an input sklearn classifier to the data.
@@ -1009,49 +1113,51 @@ class RunML(DefData):
         --------
         - clf: Selected classifier from the sklearn package,
         e.g. sklearn.ensemble.RandomForestClassifier
-        - x_train: Numpy array of x values of training data
-        - y_train: Numpy array of y values of training data
-        - train_groups: Numpy array of group names of training data
-        - x_test: Numpy array of x values of test data
-        - y_test: Numpy array of y values of test data
-        - n_components_pca: The number of components to tranform the data to
+        - x: Numpy array of all x data (no need to have already split into
+        training and test data)
+        - y: Numpy array of all y data (no need to have already split into
+        training and test data)
+        - groups: Numpy array of all group names (no need to have already split
+        into training and test data)
+        - n_components_pca: The number of components to transform the data to
         after fitting the data with PCA. If set to None, PCA will not be
         included in the pipeline.
-        - run: Either 'randomsearch', 'gridsearch' or 'train'. Directs the
-        function whether to run cross-validation with RandomizedSearchCV or
-        GridSearchCV to select a suitable combination of hyperparameter values,
-        or whether to train and test the model.
+        - run: Either 'randomsearch' or 'gridsearch'. Directs the function
+        whether to run inner loop cross-validation with RandomizedSearchCV or
+        GridSearchCV to select a suitable combination of hyperparameter values.
         - fixed_params: Dictionary of hyperparameters and their selected values
         that remain constant regardless of the value of 'run' (e.g. n_jobs = -1)
-        - tuned_params: If run == 'randomsearch' or 'gridsearch', tuned_params
-        is a dictionary of hyperparameter values to search. Key = hyperparameter
-        name (must match the name of the parameter in the selected clf class);
-        Value = range of values to test for that hyperparameter - note that all
-        numerical ranges must be supplied as numpy arrays in order to avoid
-        throwing an error with the imblearn Pipeline() class. Else if
-        run == 'train', params is also a dictionary of hyperparameters, but in
-        this case a single value is provided for each hyperparameter as opposed
-        to a range.
+        - tuned_params: Dictionary of hyperparameter values to search.
+        Key = hyperparameter name (must match the name of the parameter in the
+        selected clf class); Value = range of values to test for that
+        hyperparameter - note that all numerical ranges must be supplied as
+        numpy arrays in order to avoid throwing an error with the imblearn
+        Pipeline() class.
         - train_scoring_func: The function used to score the fitted classifier
         on the data set aside for validation during cross-validation. Either a
         function, or the name of one of the scoring functions in sklearn (see
         list of recognised names at https://scikit-learn.org/stable/modules/
         model_evaluation.html#scoring-parameter).
-        - test_scoring_funcs: Required if run == 'train'. Dictionary of sklearn
-        scoring functions and dictionaries of arguments to be fed into these
-        functions. E.g. sklearn.metrics.f1_score: {'average': 'macro'}
+        - test_scoring_funcs: Dictionary of sklearn scoring functions and
+        dictionaries of arguments to be fed into these functions.
+        E.g. sklearn.metrics.f1_score: {'average': 'macro'}
         - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
         - n_iter: Required if run == 'randomsearch'. Integer number of
         hyperparameter combinations to test / ''. If set to '' will be set to
-        either 25 or 10% of the total number of possible combinations of
+        either 100 or 1/3 of the total number of possible combinations of
         hyperparameter values specified in the params dictionary (whichever is
         larger).
-        - cv_folds: Integer number of folds to run in cross-validation. E.g. as
-        a default cv_folds = 5, which generates 5 folds of training and
-        validation data, with 80% and 20% of the data forming the training and
-        validation sets respectively.
+        - cv_folds_inner_loop: Integer number of folds to run in
+        cross-validation (loops = 1) / the inner cross-validation loop
+        (loops = 2). E.g. as a default cv_folds_inner_loop = 5, which generates
+        5 folds of training and validation data, with 80% and 20% of the data
+        forming the  training and validation sets respectively.
+        - cv_folds_outer_loop: Integer number of folds to run in the outer
+        cross-validation loop (loops = 2). Set to 'loocv' as default, which
+        specifies a number of folds equal to the size of the dataset
+        (leave-one-out cross-validation)
         - draw_conf_mat: Boolean, dictates whether to plot confusion matrices to
         compare the model predictions to the test data
 
@@ -1068,24 +1174,136 @@ class RunML(DefData):
         on the testing data
         """
 
-        run = run.lower().replace(' ', '')
-        if run in ['randomsearch', 'gridsearch']:
-            clf = clf(**fixed_params)
-            search, *_ = self.run_algorithm(
-                clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, tuned_params, train_scoring_func,
-                test_scoring_funcs, resampling_method, n_iter, cv_folds,
-                draw_conf_mat
-            )
-            return search
+        from sklearn.model_selection import (
+            GroupKFold, LeaveOneOut, StratifiedKFold
+        )
 
-        elif run == 'train':
-            params = {**fixed_params, **tuned_params}
-            clf = clf(**params)
-            search, train_scores, test_scores, predictions = self.run_algorithm(
-                clf, x_train, y_train, train_groups, x_test, y_test,
-                n_components_pca, run, {}, train_scoring_func,
-                test_scoring_funcs, resampling_method, n_iter, cv_folds,
-                draw_conf_mat
+        nested_cv_search = OrderedDict({
+            'inner_loop_searches': [],
+            'outer_loop_models': [],
+            'outer_loop_params': [],
+            'test_scores': {},
+            'predictions': [],
+            'x_true': [],
+            'y_true': []
+        })
+        for scoring_func in test_scoring_funcs.keys():
+            nested_cv_search['test_scores'][
+                scoring_func.__name__.replace('_score', '')
+            ] = []
+
+        # Split data into train and test sets
+        loocv = ''
+        skf = ''
+        gkf = ''
+        if type(cv_folds_outer_loop) == str:
+            if cv_folds_outer_loop.lower().replace(' ', '') == 'loocv':
+                loocv = LeaveOneOut()
+                splits = loocv.split(X=x, y=y)
+            else:
+                raise ValueError(
+                    'Value {} for CV method in outer loop not recognised - '
+                    'set to either "loocv" or an integer number of '
+                    'folds'.format(cv_folds_outer_loop)
+                )
+        else:
+            if self.randomise is True:
+                skf = StratifiedKFold(n_splits=cv_folds_outer_loop, shuffle=True)
+                splits = skf.split(X=x, y=y)
+            else:
+                gkf = GroupKFold(n_splits=cv_folds_outer_loop)
+                splits = gkf.split(X=x, y=y, groups=groups)
+
+        for split in splits:
+            train_split = split[0]
+            test_split = split[1]
+            x_train = x[train_split]
+            y_train = y[train_split]
+            x_test = x[test_split]
+            y_test = y[test_split]
+            if groups is not None:
+                train_groups = groups[train_split]
+            else:
+                train_groups = None
+
+            # Random / grid search of hyperparameters on training set
+            train_clf = clf(**fixed_params)
+            search = self.run_ml(
+                train_clf, x_train, y_train, train_groups, '', '',
+                selected_features, n_components_pca, run, tuned_params,
+                train_scoring_func, {}, resampling_method, n_iter,
+                cv_folds_inner_loop, draw_conf_mat
             )
-            return search, train_scores, test_scores, predictions
+            nested_cv_search['inner_loop_searches'].append(search)
+            best_params = {key.split('__')[1]: val
+                           for key, val in search.best_params_.items()}
+            # Train clf with best hyperparameter selection on training split,
+            # then make predictions and calculate selected statistics on test
+            # split
+            best_params = {**fixed_params, **best_params}
+            test_clf = clf(**best_params)
+            split_search, split_test_scores, split_predictions = self.run_ml(
+                test_clf, x_train, y_train, train_groups, x_test, y_test,
+                selected_features, n_components_pca, 'train', {},
+                train_scoring_func, test_scoring_funcs, resampling_method,
+                n_iter, '', draw_conf_mat
+            )
+            nested_cv_search['outer_loop_params'].append(best_params)
+            nested_cv_search['outer_loop_models'].append(split_search)
+
+            for scoring_func_name, val in split_test_scores.items():
+                nested_cv_search['test_scores'][scoring_func_name].append(val)
+            nested_cv_search['predictions'].append(split_predictions)
+            nested_cv_search['x_true'].append(x_test)
+            nested_cv_search['y_true'].append(y_test)
+
+        # Calculate average, standard deviation and percentiles of interest
+        # across cv_folds_outer_loop folds
+        nested_cv_search['average_test_scores'] = {}
+        for scoring_func_name, score_list in nested_cv_search['test_scores'].items():
+            nested_cv_search['average_test_scores'][scoring_func_name] = np.mean(score_list)
+        nested_cv_search['std_test_scores'] = {}
+        for scoring_func_name, score_list in nested_cv_search['test_scores'].items():
+            nested_cv_search['std_test_scores'][scoring_func_name] = np.std(score_list, ddof=0)  # Population standard deviation
+        nested_cv_search['percentile_test_scores'] = {}
+        for scoring_func_name, score_list in nested_cv_search['test_scores'].items():
+            nested_cv_search['percentile_test_scores'][scoring_func_name] = [
+                np.percentile(score_list, 2.5), np.percentile(score_list, 50),
+                np.percentile(score_list, 97.5)
+            ]
+        best_index = np.where(
+               nested_cv_search['test_scores'][train_scoring_func]
+            == np.amax(nested_cv_search['test_scores'][train_scoring_func])
+        )[0][0]
+        nested_cv_search['best_outer_loop_params'] = nested_cv_search['outer_loop_params'][best_index]
+
+        return nested_cv_search
+
+    def run_5x2_CV_paired_t_test(
+        self, x, y, groups, selected_features_1, selected_features_2,
+        classifier_1, classifier_2, params_1, params_2, resampling_method_1,
+        resampling_method_2, n_components_pca_1, n_components_pca_2, scoring_func
+    ):
+        """
+        Runs 5x2 CV combined F test to calculate whether there is a significant
+        difference in performance between two classifier models.
+        """
+
+        from mlxtend.evaluate import combined_ftest_5x2cv
+
+        clf_1 = classifier_1(**params_1)
+        trained_clf_1 = self.train_model(
+            x, y, groups, selected_features_1, clf_1, resampling_method_1,
+            n_components_pca_1, scoring_func
+        )
+        clf_2 = classifier_2(**params_2)
+        trained_clf_2 = self.train_model(
+            x, y, groups, selected_features_2, clf_2, resampling_method_2,
+            n_components_pca_2, scoring_func
+        )
+
+        F, p = combined_ftest_5x2cv(
+            estimator1=trained_clf_1, estimator2=trained_clf_2, X=x, y=y
+        )
+
+        return F, p
