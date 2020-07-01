@@ -1,7 +1,9 @@
 
+imblearn
 jinja2
 numpy
 matplotlib
+mlxtend
 pandas
 scikit-learn
 scipy

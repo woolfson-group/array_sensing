@@ -16,11 +16,11 @@ setup(
     author=('Kathryn Shelley, Chris Wells Wood and Will Dawson in the lab '
             'of Professor Dek Woolfson, University of Bristol'),
     author_email='kathryn.l.shelley@gmail.com',
-    url='https://github.com/woolfson-group/sensing_array_paper_2019',
+    url='https://github.com/woolfson-group/array_sensing',
     license='MIT',
     keywords=['badass', 'array sensing', 'machine learning'],
-    install_requires=['jinja2', 'numpy', 'matplotlib', 'pandas', 'scikit-learn',
-                      'scipy', 'seaborn', 'xlrd'],
+    install_requires=['imblearn', 'jinja2', 'numpy', 'matplotlib', 'mlxtend',
+                      'pandas', 'scikit-learn', 'scipy', 'seaborn', 'xlrd'],
     classifiers=['Programming Language :: Python'],
     python_requires=('!=2.*, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, '
                      '!=3.5.*, <4')
