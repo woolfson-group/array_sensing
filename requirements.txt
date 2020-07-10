@@ -1,5 +1,5 @@
 
-imblearn==0.6.2
+imbalanced-learn==0.6.2
 jinja2==2.10.3
 numpy==1.17.2
 matplotlib==3.2.0
