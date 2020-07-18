@@ -1,0 +1,6 @@
+**/.cache/*
+**/__pycaxhe__/*
+**/.ipynb_notebooks/*
+Standard_array_data/*
+dist/*
+array_sensing.egg_info
