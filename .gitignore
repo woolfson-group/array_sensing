@@ -1,6 +1,9 @@
 **/.cache/*
 **/__pycache__/*
 **/.ipynb_checkpoints/*
-Standard_array_data/*
 **/dist/*
-**/array_sensing.egg_info/*
+**/array_sensing.egg-info/*
+Standard_array_data/*
+Large_array_data/AAs/*.xlsx
+Large_array_data/FAs/*.xlsx
+Large_array_data/Sugars/*.xlsx
