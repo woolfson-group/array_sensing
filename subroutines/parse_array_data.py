@@ -75,7 +75,7 @@ def trim_dataframe(label_df, plate_path):
     return label_df
 
 
-def parse_xlsx_to_dataframe(plate_path, peptide_dict, gain=1):
+def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
     """
     Converts an excel xlsx file output from the plate reader into a pandas
     dataframe.
@@ -156,10 +156,12 @@ def parse_xlsx_to_dataframe(plate_path, peptide_dict, gain=1):
     # by the user, and that there are no repeated peptides
     peptide_list = []
     for fluorophore, sub_peptide_list in peptide_dict.items():
-        if sorted(sub_peptide_list) == sorted(plate_peptides):
+        if (
+                (split == fluorophore)
+            and (sorted(sub_peptide_list) == sorted(plate_peptides))
+        ):
             peptide_list = ['{}_{}'.format(fluorophore, peptide)
                             for peptide in sub_peptide_list]
-            split = fluorophore
             break
     if peptide_list == []:
         raise PlateLayoutError('Peptides tested in {} don\'t match peptides'
@@ -244,7 +246,7 @@ def parse_xlsx_to_dataframe(plate_path, peptide_dict, gain=1):
         analyte_df.columns = df_columns
         grouped_fluor_data[analyte] = analyte_df
 
-    return fluor_df, grouped_fluor_data, peptide_list, split
+    return fluor_df, grouped_fluor_data, peptide_list
 
 
 def draw_scatter_plot(
@@ -913,13 +915,14 @@ def run_anova(fluor_df, results_dir):
 class ParseArrayData(DefData):
 
     def __init__(
-        self, data_dir, results_dir, repeat_labels_list, peptide_dict,
+        self, data_dirs_dict, results_dir, repeat_labels_list, peptide_dict,
         control_peptides, control_analytes, gain=1, min_fluor=0,
         max_fluor=260000
     ):
         """
-        - data_dir: Path (either absolute or relative) to directory containing
-        xlsx files of fluorescence readings.
+        - data_dirs_dict: Dictionary of split names and paths (either absolute
+        or relative) to directory containing xlsx files of fluorescence readings
+        for that split
         - results_dir: Path (either absolute or relative) to directory where
         output files should be saved. This directory will be created by the
         program and so should not already exist.
@@ -949,9 +952,12 @@ class ParseArrayData(DefData):
         DefData.__init__(self, results_dir)
 
         # Defines directory where files of fluorescence readings are saved
-        self.data_dir = data_dir
-        if not os.path.isdir(self.data_dir):
-            raise FileNotFoundError('Path to data directory not recognised')
+        self.data_dirs_dict = data_dirs_dict
+        for data_dir in self.data_dirs_dict.values():
+            if not os.path.isdir(data_dir):
+                raise FileNotFoundError(
+                    'Path to data directory not recognised:\n{}'.format(data_dir)
+                )
 
         # Defines dictionary of lists of file names grouped by repeat label
         self.repeat_list = repeat_labels_list
@@ -1057,9 +1063,10 @@ class ParseArrayData(DefData):
 
     def group_xlsx_repeats(self, ignore_files=[]):
         """
-        Groups xlsx files in the directory self.data_dir into independent
-        repeats (via the name of the repeat included at the end of the file
-        name)
+        Groups xlsx files in the directories in self.data_dirs_dict into
+        independent repeats (via the name of the repeat included at the end of
+        the file name)
+
         Input
         --------
         - ignore_files: List of files not to be included in the analysis
@@ -1069,30 +1076,37 @@ class ParseArrayData(DefData):
 
         # Checks that all files slated for removal a) actually exist and b) are
         # xlsx files
-        all_files = sorted(os.listdir(self.data_dir))
-        for xlsx in ignore_files:
-            if not xlsx in all_files:
-                raise FileNotFoundError(
-                    '{} not found in\n{}\n- make sure that all files specified to'
-                    ' be exluded from the analysis exist'.format(xlsx, all_files)
-                )
-            if not xlsx.endswith('.xlsx'):
-                raise Exception(
-                    'File {} specified to be excluded from the analysis is not '
-                    'an xlsx file'.format(xlsx)
-                )
+        for data_dir in self.data_dirs_dict.values():
+            all_files = sorted(os.listdir(data_dir))
+            for xlsx in ignore_files:
+                if not xlsx in all_files:
+                    raise FileNotFoundError(
+                        '{} not found in\n{}\n- make sure that all files '
+                        'specified to be exluded from the analysis '
+                        'exist'.format(xlsx, all_files)
+                    )
+                if not xlsx.endswith('.xlsx'):
+                    raise Exception(
+                        'File {} specified to be excluded from the analysis is '
+                        'not an xlsx file'.format(xlsx)
+                    )
 
         for repeat in self.repeat_list:
-            xlsx_file_dict[repeat] = []
-            for file_name in all_files:
-                if file_name.endswith('{}.xlsx'.format(repeat)):
-                    if (
-                            not file_name.startswith('~$')
-                        and not file_name in ignore_files
-                    ):
-                        xlsx_file_dict[repeat].append(file_name)
-                    elif file_name in ignore_files:
-                        print('Successfully removed {}'.format(file_name))
+            xlsx_file_dict[repeat] = OrderedDict()
+
+            for split, data_dir in self.data_dirs_dict.items():
+                all_files = sorted(os.listdir(data_dir))
+                xlsx_file_dict[repeat][split] = []
+
+                for file_name in all_files:
+                    if file_name.endswith('{}.xlsx'.format(repeat)):
+                        if (
+                                not file_name.startswith('~$')
+                            and not file_name in ignore_files
+                        ):
+                            xlsx_file_dict[repeat][split].append(file_name)
+                        elif file_name in ignore_files:
+                            print('Successfully removed {}'.format(file_name))
 
         self.repeat_dict = xlsx_file_dict
 
@@ -1140,100 +1154,127 @@ class ParseArrayData(DefData):
 
         raw_plate_data = OrderedDict()
         unscaled_data = OrderedDict()
-        plate_split_dict = OrderedDict()
-        for repeat, xlsx_list in self.repeat_dict.items():
-            for xlsx in xlsx_list:
-                # Converts xlsx spreadsheet into dataframes
-                plate_path = self.data_dir + xlsx
-                raw_data, plate, peptide_list, split = parse_xlsx_to_dataframe(
-                    plate_path, self.peptide_dict, self.gain
-                )
-                plate_split_dict[plate_path] = split
-                raw_plate_data[plate_path] = raw_data
-                unscaled_data[plate_path] = plate
-
-                # Draws plots to show variation in repeat readings
-                if draw_plot is True:
-                    plot_analytes = [analyte for analyte in plate.keys()
-                                     if not analyte in self.control_analytes]
-                    draw_scatter_plot(
-                        plate, self.results_dir, peptide_list, plot_analytes,
-                        xlsx
+        for repeat in self.repeat_dict.keys():
+            for split, xlsx_list in self.repeat_dict[repeat].items():
+                for xlsx in xlsx_list:
+                    # Converts xlsx spreadsheet into dataframes
+                    plate_path = self.data_dirs_dict[split] + xlsx
+                    raw_data, plate, peptide_list = parse_xlsx_to_dataframe(
+                        plate_path, split, self.peptide_dict, self.gain
                     )
+                    raw_plate_data[plate_path] = raw_data
+                    unscaled_data[plate_path] = plate
 
-                # Checks for saturated readings
-                saturated_readings = check_for_saturation(
-                    plate, plate_path, peptide_list, self.min_fluor,
-                    self.max_fluor
-                )
-                if saturated_readings != []:
-                    merged_saturated_readings = '\n'.join([
-                        '{} {} {}'.format(x[1], x[2], x[3])
-                        for x in saturated_readings
-                    ])
-                    raise FluorescenceSaturationError(
-                        'The following data points appear to have saturated the'
-                        ' plate reader on plate {}:\n{}\nTo proceed with '
-                        'analysis you need to either remove the identified '
-                        'barrels, or replace the fluorescence\nreadings for '
-                        'this barrel with readings collected at a different '
-                        'gain, for ALL xlsx files in the dataset.'.format(
-                            plate_path, merged_saturated_readings
+                    # Draws plots to show variation in repeat readings
+                    if draw_plot is True:
+                        plot_analytes = [analyte for analyte in plate.keys()
+                                         if not analyte in self.control_analytes]
+                        draw_scatter_plot(
+                            plate, self.results_dir, peptide_list, plot_analytes,
+                            xlsx
                         )
+
+                    # Checks for saturated readings
+                    saturated_readings = check_for_saturation(
+                        plate, plate_path, peptide_list, self.min_fluor,
+                        self.max_fluor
                     )
+                    if saturated_readings != []:
+                        merged_saturated_readings = '\n'.join([
+                            '{} {} {}'.format(x[1], x[2], x[3])
+                            for x in saturated_readings
+                        ])
+                        raise FluorescenceSaturationError(
+                            'The following data points appear to have saturated the'
+                            ' plate reader on plate {}:\n{}\nTo proceed with '
+                            'analysis you need to either remove the identified '
+                            'barrels, or replace the fluorescence\nreadings for '
+                            'this barrel with readings collected at a different '
+                            'gain, for ALL xlsx files in the dataset.'.format(
+                                plate_path, merged_saturated_readings
+                            )
+                        )
 
         scaled_data = OrderedDict()
         outliers = OrderedDict()
-        for repeat, xlsx_list in self.repeat_dict.items():
+        for repeat in self.repeat_dict.keys():
             scaled_data[repeat] = OrderedDict()
             outliers[repeat] = OrderedDict()
 
-            for xlsx in xlsx_list:
-                plate_path = self.data_dir + xlsx
-                split = plate_split_dict[plate_path]
-                plate = unscaled_data[plate_path]
+            for split, xlsx_list in self.repeat_dict[repeat].items():
+                scaled_data[repeat][split] = OrderedDict()
+                outliers[repeat][split] = OrderedDict()
 
-                # Performs min max scaling to enable samples across plates to be
-                # compared and/or combined, plus removes features the user has
-                # specified to ignore.
-                cols_ignore = ['{}_{}'.format(split, peptide)
-                               for peptide in self.control_peptides[split]]
-                outliers[repeat][plate_path] = []
-                scaled_plate, outliers[repeat][plate_path] = scale_min_max(
-                    scale_method, plate, plate_path, no_pep, split,
-                    cols_ignore, outliers[repeat][plate_path],
-                    outlier_excl_thresh, drop_thresh, k_max
-                )
-                scaled_data[repeat][plate_path] = scaled_plate
+                for xlsx in xlsx_list:
+                    plate_path = self.data_dirs_dict[split] + xlsx
+                    plate = unscaled_data[plate_path]
 
-        # Checks that there is data for the same set of analytes in each repeat,
-        # not considering analytes that the user has specified to be discarded
+                    # Performs min max scaling to enable samples across plates to be
+                    # compared and/or combined, plus removes features the user has
+                    # specified to ignore.
+                    cols_ignore = ['{}_{}'.format(split, peptide)
+                                   for peptide in self.control_peptides[split]]
+                    outliers[repeat][split][plate_path] = []
+                    (
+                        scaled_plate, outliers[repeat][split][plate_path]
+                    ) = scale_min_max(
+                        scale_method, plate, plate_path, no_pep, split,
+                        cols_ignore, outliers[repeat][split][plate_path],
+                        outlier_excl_thresh, drop_thresh, k_max
+                    )
+                    scaled_data[repeat][split][plate_path] = scaled_plate
+
+        # Checks that there is data for the same set of analytes in each repeat
+        # and across all splits, not considering analytes that the user has
+        # specified to be discarded
         count = 0
         orig_analytes = []  # Generates a list of all unique analytes in the
         # dataset
+        repeat_1_analytes = OrderedDict()
         for repeat in scaled_data.keys():
-            repeat_analytes = []
+            repeat_analytes = OrderedDict()
             count += 1
-            for plate_path in scaled_data[repeat].keys():
-                plate_analytes = [
-                    analyte for analyte in scaled_data[repeat][plate_path].keys()
-                    if not analyte in self.control_analytes
-                ]
-                repeat_analytes += plate_analytes
 
-            repeat_analytes = set(sorted(repeat_analytes))
-            if count == 1:
-                repeat_1 = copy.deepcopy(repeat)
-                repeat_1_analytes = copy.deepcopy(repeat_analytes)
-            else:
-                diff_analytes = repeat_analytes.symmetric_difference(repeat_1_analytes)
-                if diff_analytes != set():
-                    print('\x1b[31m WARNING: The analytes tested in different '
-                          'repeats are not the same. Analytes {} are not '
-                          'consistent between {} and {} \033[0m'.format(
-                          diff_analytes, repeat_1, repeat))
-                orig_analytes += [analyte for analyte in repeat_analytes
-                                  if not analyte in orig_analytes]
+            for split in scaled_data[repeat].keys():
+                repeat_analytes[split] = []
+
+                for plate_path in scaled_data[repeat][split].keys():
+                    plate_analytes = [
+                        analyte for analyte in
+                        scaled_data[repeat][split][plate_path].keys()
+                        if not analyte in self.control_analytes
+                    ]
+                    repeat_analytes[split] += plate_analytes
+
+                repeat_analytes[split] = set(sorted(repeat_analytes[split]))
+                if count == 1:
+                    repeat_1 = copy.deepcopy(repeat)
+                    repeat_1_analytes[split] = copy.deepcopy(repeat_analytes[split])
+                else:
+                    diff_analytes = repeat_analytes[split].symmetric_difference(
+                        repeat_1_analytes[split]
+                    )
+                    if diff_analytes != set():
+                        # Doesn't raise an exception as don't want to prevent
+                        # analysis with unbalanced classes, but do want the user
+                        # to check that this is what they are expecting!
+                        print('\x1b[31m WARNING: The analytes tested in different '
+                              'repeats are not the same. Analytes {} are not '
+                              'consistent between {} and {} \033[0m'.format(
+                              diff_analytes, repeat_1, repeat))
+                    orig_analytes += [analyte for analyte in repeat_analytes[split]
+                                      if not analyte in orig_analytes]
+
+            # Analytes across the different splits must be identical
+            split_analytes = tuple(
+                tuple(sub_list) for sub_list in repeat_analytes.values()
+            )
+            if len(set(split_analytes)) != 1:
+                raise Exception(
+                    'Analytes across splits in repeat {} are not identical:\n'
+                    '{}'.format(repeat, repeat_analytes)
+                )
+
         # Checks that all control analytes (slated for removal) are actually
         # in the dataset
         for analyte in self.control_analytes:
@@ -1246,11 +1287,12 @@ class ParseArrayData(DefData):
 
         # Removes analytes the user has specified to ignore in the analysis
         for repeat in scaled_data.keys():
-            for plate_path in scaled_data[repeat].keys():
-                plate = copy.deepcopy(scaled_data[repeat][plate_path])
-                for analyte, fluor_df in plate.items():
-                    if analyte in self.control_analytes:
-                        del scaled_data[repeat][plate_path][analyte]
+            for split in scaled_data[repeat].keys():
+                for plate_path in scaled_data[repeat][split].keys():
+                    plate = copy.deepcopy(scaled_data[repeat][split][plate_path])
+                    for analyte, fluor_df in plate.items():
+                        if analyte in self.control_analytes:
+                            del scaled_data[repeat][split][plate_path][analyte]
 
         # Saves (scaled) plate data as object attributes
         self.plates = raw_plate_data
@@ -1271,10 +1313,10 @@ class ParseArrayData(DefData):
         for split in self.peptide_dict:
             split_features[split] = []
         for feature in self.all_features:
+            split = feature.split('_')[0]
             sub_feature = feature.split('_')[-1]
-            for split in self.peptide_dict:
-                if sub_feature in self.peptide_dict[split]:
-                    split_features[split].append(feature)
+            if sub_feature in self.peptide_dict[split]:
+                split_features[split].append(feature)
         self.split_features = split_features
         self.analytes = upd_analytes
 
@@ -1283,17 +1325,18 @@ class ParseArrayData(DefData):
             f.write('Outliers on same plate identified by generalised ESD test:\n')
             print('\n\nOutliers on the same plate:\n')
             for repeat in outliers.keys():
-                for plate_path in outliers[repeat].keys():
-                    for outlier in outliers[repeat][plate_path]:
-                        analyte = outlier[0]
-                        peptide = outlier[1]
-                        reading = outlier[2]
-                        f.write('{}: {}, {}, {}\n'.format(
-                            plate_path, analyte, peptide, reading
-                        ))
-                        print('{}: {}, {}, {}'.format(
-                            plate_path, analyte, peptide, reading
-                        ))
+                for split in outliers[repeat].keys():
+                    for plate_path in outliers[repeat][split].keys():
+                        for outlier in outliers[repeat][split][plate_path]:
+                            analyte = outlier[0]
+                            peptide = outlier[1]
+                            reading = outlier[2]
+                            f.write('{}: {}, {}, {}\n'.format(
+                                plate_path, analyte, peptide, reading
+                            ))
+                            print('{}: {}, {}, {}'.format(
+                                plate_path, analyte, peptide, reading
+                            ))
 
     def combine_plate_readings(
         self, outlier_excl_thresh=0.05, drop_thresh=2, k_max=np.nan
@@ -1323,38 +1366,40 @@ class ParseArrayData(DefData):
             scaled_merged_dfs[repeat] = OrderedDict()
             analyte_dfs_dict = OrderedDict()
 
-            repeat_analytes = []
-            for plate_path, plate_dict in self.scaled_data[repeat].items():
-                for analyte in plate_dict.keys():
-                    if not analyte in repeat_analytes:
-                        repeat_analytes.append(analyte)
+            for split in self.scaled_data[repeat].keys():
+                repeat_analytes = []
 
-            for analyte in self.analytes:
-                if analyte in repeat_analytes:
-                    analyte_dfs_dict[analyte] = OrderedDict()
-                    for split in self.peptide_dict.keys():
+                for plate_path, plate_dict in self.scaled_data[repeat][split].items():
+                    for analyte in plate_dict.keys():
+                        if not analyte in repeat_analytes:
+                            repeat_analytes.append(analyte)
+
+                for analyte in self.analytes:
+                    if analyte in repeat_analytes:
+                        if not analyte in analyte_dfs_dict.keys():
+                            analyte_dfs_dict[analyte] = OrderedDict()
                         analyte_dfs_dict[analyte][split] = []
 
-            for plate_path, plate_dict in self.scaled_data[repeat].items():
-                for analyte, orig_analyte_df in plate_dict.items():
-                    analyte_df = copy.deepcopy(orig_analyte_df).drop(
-                        ['Analyte', 'Plate'], axis=1
-                    )
-                    cols = list(analyte_df.columns)
-                    match = False
-                    for split, split_cols in self.split_features.items():
-                        if cols == split_cols:
-                            match = True
-                            analyte_dfs_dict[analyte][split].append(analyte_df)
-                            break
-                    if match is False:
-                        exp_cols = []
-                        for split, split_cols in self.split_features.items():
-                            exp_cols += split_cols
-                        raise Exception(
-                            'Peptides\n{}\ndo not match any of the expected '
-                            'peptide lists:\n{}'.format(cols, exp_cols)
+                for plate_path, plate_dict in self.scaled_data[repeat][split].items():
+                    for analyte, orig_analyte_df in plate_dict.items():
+                        analyte_df = copy.deepcopy(orig_analyte_df).drop(
+                            ['Analyte', 'Plate'], axis=1
                         )
+                        cols = list(analyte_df.columns)
+                        match = False
+                        for split, split_cols in self.split_features.items():
+                            if cols == split_cols:
+                                match = True
+                                analyte_dfs_dict[analyte][split].append(analyte_df)
+                                break
+                        if match is False:
+                            exp_cols = []
+                            for split, split_cols in self.split_features.items():
+                                exp_cols += split_cols
+                            raise Exception(
+                                'Peptides\n{}\ndo not match any of the expected '
+                                'peptide lists:\n{}'.format(cols, exp_cols)
+                            )
 
             for analyte in analyte_dfs_dict.keys():
                 # Merges same analyte, same barrels
@@ -1375,8 +1420,8 @@ class ParseArrayData(DefData):
                     all_cols += list(comb_df.columns)
                 if len(set(lens)) != 1:
                     raise Exception(
-                        'Different number of repeats measured for {} in repeat '
-                        '{} across barrels in different splits:\n{} '
+                        'Different number of replicates measured for {} in '
+                        'repeat {} across barrels in different splits:\n{} '
                         'measurements found respectively for {}'.format(
                             analyte, repeat, lens, self.peptide_dict
                         )
