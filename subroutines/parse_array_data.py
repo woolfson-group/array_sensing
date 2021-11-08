@@ -13,6 +13,7 @@ import pandas as pd
 import seaborn as sns
 from collections import OrderedDict
 from scipy import stats
+from scipy.stats import f_oneway
 from sklearn.preprocessing import RobustScaler
 
 if __name__ == 'subroutines.parse_array_data':
@@ -270,7 +271,9 @@ def draw_scatter_plot(
     """
 
     repeat_id = repeat_id.replace('.xlsx', '')
-    print('Drawing scatter plot of data spread for {}'.format(repeat_id))
+    print('Drawing scatter plot of data spread for {} in {}'.format(
+        repeat_id, results_dir.split('/')[-1]
+    ))
 
     plot_data = OrderedDict()
     for analyte, analyte_df in copy.deepcopy(grouped_fluor_data).items():
@@ -904,14 +907,6 @@ def draw_boxplots(
             plt.show()
 
 
-def run_anova(fluor_df, results_dir):
-    """
-    """
-
-    from scipy.stats import f_oneway
-    pass
-
-
 class ParseArrayData(DefData):
 
     def __init__(
@@ -1111,8 +1106,8 @@ class ParseArrayData(DefData):
         self.repeat_dict = xlsx_file_dict
 
     def xlsx_to_scaled_df(
-        self, no_pep, scale_method, draw_plot, outlier_excl_thresh=0.05,
-        drop_thresh=2, k_max=np.nan
+        self, no_pep, scale_method, draw_plot, plot_dir_name,
+        outlier_excl_thresh=0.05, drop_thresh=2, k_max=np.nan
     ):
         """
         Parses grouped xlsx files into dataframes and performs min max scaling.
@@ -1152,6 +1147,25 @@ class ParseArrayData(DefData):
             raise TypeError('Expect argument "draw_plot" to be a Boolean (True '
                             'or False)')
 
+        if draw_plot is True:
+            plot_dirs = [
+                '{}/{}_unscaled_data'.format(self.results_dir, plot_dir_name),
+                '{}/{}_scaled_data'.format(self.results_dir, plot_dir_name)
+            ]
+            for plot_dir in plot_dirs:
+                if os.path.isdir(plot_dir):
+                    raise FileExistsError(
+                        'Directory {} already exists'.format(plot_dir)
+                    )
+                try:
+                    os.mkdir(plot_dir)
+                except FileNotFoundError:
+                    raise FileNotFoundError(
+                        'Directory {} doesn\'t exist'.format(
+                            '/'.join(plot_dir.split('/')[:-1])
+                        )
+                    )
+
         raw_plate_data = OrderedDict()
         unscaled_data = OrderedDict()
         for repeat in self.repeat_dict.keys():
@@ -1167,11 +1181,15 @@ class ParseArrayData(DefData):
 
                     # Draws plots to show variation in repeat readings
                     if draw_plot is True:
-                        plot_analytes = [analyte for analyte in plate.keys()
-                                         if not analyte in self.control_analytes]
+                        plot_analytes = [
+                            analyte for analyte in plate.keys()
+                            if not analyte in self.control_analytes
+                        ]
+                        plot_dir = '{}/{}_unscaled_data'.format(
+                            self.results_dir, plot_dir_name
+                        )
                         draw_scatter_plot(
-                            plate, self.results_dir, peptide_list, plot_analytes,
-                            xlsx
+                            plate, plot_dir, peptide_list, plot_analytes, xlsx
                         )
 
                     # Checks for saturated readings
@@ -1223,6 +1241,20 @@ class ParseArrayData(DefData):
                         outlier_excl_thresh, drop_thresh, k_max
                     )
                     scaled_data[repeat][split][plate_path] = scaled_plate
+
+                    # Draws plots to show variation in repeat readings
+                    if draw_plot is True:
+                        plot_analytes = [
+                            analyte for analyte in scaled_plate.keys()
+                            if not analyte in self.control_analytes
+                        ]
+                        plot_dir = '{}/{}_scaled_data'.format(
+                            self.results_dir, plot_dir_name
+                        )
+                        draw_scatter_plot(
+                            scaled_plate, plot_dir, peptide_list, plot_analytes,
+                            xlsx
+                        )
 
         # Checks that there is data for the same set of analytes in each repeat
         # and across all splits, not considering analytes that the user has
@@ -1553,3 +1585,49 @@ class ParseArrayData(DefData):
             self.ml_fluor_data, self.results_dir, scale, cushion, class_order,
             prefix
         )
+
+    def run_anova(self):
+        """
+        Runs one-way anova to determine if there is a significant difference
+        between a barrel's fluorescence readings in the absence and presence of
+        analyte
+        """
+
+        print(
+            'Running one-way ANOVA.\nANOVA assumes that, for each individual '
+            'peptide:\n1: The readings for each analyte are normally '
+            'distributed\n2: The standard deviations of the readings for each '
+            'analyte are equal\n3: The readings are independent'
+        )
+
+        stats_dict = OrderedDict()
+        median_vals_dict = OrderedDict()
+
+        for peptide in self.all_features:
+            stats_dict[peptide] = OrderedDict()
+            stats_dict[peptide]['F statistic'] = np.nan
+            stats_dict[peptide]['p value'] = np.nan
+            median_vals = []
+            median_vals_dict[peptide] = OrderedDict()
+
+            for analyte in self.analytes:
+                sub_df = copy.deepcopy(self.ml_fluor_data)
+                sub_df = sub_df[sub_df['Analyte'] == analyte].reset_index(drop=True)
+                median_vals.append(sub_df[peptide].tolist())
+                median_vals_dict[peptide][analyte] = sub_df[peptide].tolist()
+
+            (
+                stats_dict[peptide]['F statistic'], stats_dict[peptide]['p value']
+            ) = f_oneway(*median_vals)
+
+        print('\n\nFor each barrel, is there a significant difference between '
+              'the median reading for each analyte?')
+        for peptide in stats_dict.keys():
+            print('\n\n\n{}'.format(peptide))
+            for analyte in median_vals_dict[peptide].keys():
+                print('{}: Standard deviation {}'.format(
+                    analyte, np.std(median_vals_dict[peptide][analyte], ddof=1)
+                ))
+            print('{}: {}'.format(peptide, stats_dict[peptide]['p value']))
+
+        return stats_dict
