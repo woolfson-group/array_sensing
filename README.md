@@ -1,4 +1,4 @@
-[![CircleCI](https://circleci.com/gh/woolfson-group/sensing_array_paper_2019.svg?style=svg&circle-token=5335e8a13970b368b8b3499fb146c4911c7bab7e)](https://circleci.com/gh/woolfson-group/sensing_array_paper_2019)
+[![CircleCI](https://circleci.com/gh/woolfson-group/array_sensing.svg?style=svg&circle-token=11ec8f1d575032441d22d7c552babcffc23fe221)](https://circleci.com/gh/woolfson-group/array_sensing)
 
-# sensing_array_paper_2019
-Scripts and notebooks detailing analysis in Dawson et al., 2019
+# array_sensing
+Scripts and notebooks detailing analysis in Dawson et al., 2022
