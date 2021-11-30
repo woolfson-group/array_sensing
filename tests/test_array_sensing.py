@@ -701,6 +701,11 @@ class TestClass(unittest.TestCase):
 
         print('Testing draw_heatmap_fingerprints')
 
+        """
+        Minor change to get tests to work after deleting and remaking deploy key
+        for circleci
+        """
+
     def test_plate_parsing(self):
         """
         Tests complete plate parsing pipeline in parse_array_data
