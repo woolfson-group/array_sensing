@@ -95,8 +95,8 @@ class RunML(DefData):
                 'dataframe by the code during data processing'
             )
 
-        class_dict = {'Classes': self.classes,
-                      'Subclasses': subclasses}
+        class_dict = OrderedDict({'Classes': self.classes,
+                                  'Subclasses': subclasses})
         fluor_data = fluor_data.reset_index(drop=True)
 
         # Checks that, if defined, classes and subclasses arguments are numpy
@@ -217,7 +217,7 @@ class RunML(DefData):
         # Stratified class split
         elif one_of_each is True:
             # Checks for equal class sizes
-            organised_classes = {}
+            organised_classes = OrderedDict()
             for n in range(len(classes)):
                 class_val = classes[n]
                 subclass_val = subclasses[n]
@@ -323,39 +323,50 @@ class RunML(DefData):
             self.train_groups = self.groups[train_set]
             self.test_groups = self.groups[test_set]
 
-    def calc_feature_correlations(self, train_data):
+    def calc_feature_correlations(self, train_data, plt_name='', abs_vals=True):
         """
-        Calculates pairwise Spearman's rank correlation coefficient values
+        Calculates pairwise Kendall tau rank correlation coefficient values
         between all 2-way combinations of features, and plots a heatmap.
 
         Input
         --------
         - train_data: DataFrame of the training data, with features as column
         names
+        - abs_vals: Colour heatmap by absolute rather than raw correlation
+        coefficient values (to avoid strong negative correlations appearing to
+        be weakly correlated when glancing at the heatmap)
 
         Output
         --------
-        - correlation matrix: DataFrame of Spearman's rank correlation
+        - correlation matrix: DataFrame of Kendall tau rank correlation
         coefficient values for all pairwise combinations of features
         """
 
         feature_corr_df = train_data.drop(self.drop_cols, axis=1)  # Must be a
         # dataframe, not a numpy array
-        correlation_matrix = feature_corr_df.corr(method='spearman')
+        correlation_matrix = feature_corr_df.corr(method='kendall')
+        if abs_vals is True:
+            correlation_matrix = correlation_matrix.abs()
 
         plt.clf()
         heatmap = sns.heatmap(
             data=correlation_matrix, cmap='RdBu_r', annot=True,
-            xticklabels=True, yticklabels=True
+            xticklabels=True, yticklabels=True, fmt='.3f'
         )
         plt.xticks(rotation='vertical')
         plt.yticks(rotation='horizontal')
-        plt.savefig('{}/Feature_correlations_Spearman_rank.svg'.format(self.results_dir))
+        plt.savefig(
+            '{}/{}Feature_correlations_Kendall_tau_rank.svg'.format(
+                self.results_dir, plt_name
+            )
+        )
         plt.show()
 
         return correlation_matrix
 
-    def calc_feature_importances_kbest(self, x, y, method_classif):
+    def calc_feature_importances_kbest(
+        self, x, y, features, method_classif, scale, plt_name=''
+    ):
         """
         Runs a univariate statistical test (either f_classif or
         mutual_info_classif) between x and y to calculate the importances of the
@@ -378,47 +389,88 @@ class RunML(DefData):
         """
 
         from sklearn.feature_selection import SelectKBest
+        from sklearn.preprocessing import RobustScaler
 
-        model = SelectKBest(score_func=method_classif, k='all')
-        model.fit(X=x, y=y)
-        total_y = np.sum(model.scores_)
-        norm_y = model.scores_ / total_y
+        univ_feature_importances = OrderedDict()
+        for col in features:
+            univ_feature_importances[col] = [np.nan for n in range(100)]
+
+        for n in range(100):
+            random_rows = []
+            temp_x = pd.DataFrame(
+                data=copy.deepcopy(x), index=None, columns=features
+            )
+            temp_y = pd.DataFrame(
+                data=copy.deepcopy(y), index=None, columns=['Analyte']
+            )
+            for m in range(temp_x.shape[0]):
+                random_rows.append(random.randint(0, (temp_x.shape[0]-1)))
+            temp_x = temp_x.iloc[random_rows,:].reset_index(drop=True)
+            temp_y = temp_y.iloc[random_rows,:].reset_index(drop=True)['Analyte'].tolist()
+
+            if scale is True:
+                temp_x_scaled = RobustScaler().fit_transform(temp_x)
+                temp_x = pd.DataFrame(temp_x_scaled, index=None, columns=features)
+
+            model = SelectKBest(score_func=method_classif, k='all')
+            model.fit(X=temp_x, y=temp_y)
+            total_y = np.sum(model.scores_)
+            norm_y = model.scores_ / total_y
+
+            for col, importance in enumerate(norm_y):
+                col = features[col]
+                univ_feature_importances[col][n] = importance
+
+        cols = []
+        cols_all = []
+        univ_all = []
+        univ_median = []
+        univ_lower_conf_limit = []
+        univ_upper_conf_limit = []
+        for col, importances in univ_feature_importances.items():
+            cols.append(col)
+            univ_median.append(np.median(importances))
+            univ_lower_conf_limit.append(np.percentile(importances, 2.5))
+            univ_upper_conf_limit.append(np.percentile(importances, 97.5))
+            for importance in importances:
+                cols_all.append(col)
+                univ_all.append(importance)
 
         plt.clf()
-        barplot = sns.barplot(x=self.features, y=norm_y)
-        plt.xticks(
-            np.arange(len(self.features)), self.features, rotation='vertical'
-        )
-        plt.savefig('{}/KBest_feature_importances_barplot.svg'.format(
-            self.results_dir
+        plt.figure(figsize=(15,6))
+        sns.barplot(x=cols, y=univ_median)
+        sns.stripplot(x=cols, y=univ_lower_conf_limit, edgecolor='k',
+                      linewidth=1, s=6, jitter=False)
+        sns.stripplot(x=cols, y=univ_upper_conf_limit, edgecolor='k',
+                      linewidth=1, s=6, jitter=False)
+        plt.xticks(np.arange(len(cols)), cols, rotation='vertical')
+        plt.xlabel('Barrel')
+        plt.ylabel('Importance')
+        plt.savefig('{}/{}KBest_feat_importance_percentiles.svg'.format(
+            self.results_dir, plt_name
         ))
         plt.show()
 
         plt.clf()
-        order = np.argsort(-norm_y)
-        lineplot = sns.lineplot(
-            x=np.linspace(1, order.shape[0], order.shape[0]),
-            y=np.cumsum(norm_y[order]), marker='o'
-        )
-        labels = np.concatenate((np.array(['']), np.array(self.features)[order]), axis=0)
-        plt.xticks(
-            np.arange(labels.shape[0]), labels, rotation='vertical'
-        )
-        ax = plt.gca()
-        ax.set_ylim([0, 1.1])
-        plt.savefig('{}/KBest_feature_importances_cumulative_plot.svg'.format(
-            self.results_dir
+        plt.figure(figsize=(15,6))
+        sns.stripplot(x=cols_all, y=univ_all, edgecolor='k', linewidth=1,
+                      size=2.5, alpha=0.2)
+        plt.xticks(np.arange(len(cols)), cols, rotation='vertical')
+        plt.xlabel('Barrel')
+        plt.ylabel('Importance')
+        plt.savefig('{}/{}KBest_feat_importance_all_data.svg'.format(
+            self.results_dir, plt_name
         ))
         plt.show()
 
-        score_df = pd.DataFrame({'Feature': self.features, 'Score': norm_y})
+        score_df = pd.DataFrame({'Feature': cols, 'Score': univ_median})
         score_df = score_df.sort_values(
             by=['Score'], axis=0, ascending=False
         ).reset_index(drop=True)
 
         return score_df
 
-    def calc_feature_importances_tree(self, x, y):
+    def calc_feature_importances_tree(self, x, y, features, scale, plt_name=''):
         """
         Input
         --------
@@ -431,27 +483,179 @@ class RunML(DefData):
         """
 
         from sklearn.ensemble import ExtraTreesClassifier
+        from sklearn.preprocessing import RobustScaler
 
-        model = ExtraTreesClassifier()
-        model.fit(X=x, y=y)
-        feature_importances = model.feature_importances_
+        tree_feature_importances = OrderedDict()
+        for col in features:
+            tree_feature_importances[col] = [np.nan for n in range(100)]
+
+        for n in range(100):
+            random_rows = []
+            temp_x = pd.DataFrame(
+                data=copy.deepcopy(x), index=None, columns=features
+            )
+            temp_y = pd.DataFrame(
+                data=copy.deepcopy(y), index=None, columns=['Analyte']
+            )
+            for m in range(temp_x.shape[0]):
+                random_rows.append(random.randint(0, (temp_x.shape[0]-1)))
+            temp_x = temp_x.iloc[random_rows,:].reset_index(drop=True)
+            temp_y = temp_y.iloc[random_rows,:].reset_index(drop=True)['Analyte'].tolist()
+
+            if scale is True:
+                temp_x_scaled = RobustScaler().fit_transform(temp_x)
+                temp_x = pd.DataFrame(temp_x_scaled, index=None, columns=features)
+
+            model = ExtraTreesClassifier()
+            model.fit(X=temp_x, y=temp_y)
+            feature_importances = model.feature_importances_
+
+            for col, importance in enumerate(model.feature_importances_):
+                col = features[col]
+                tree_feature_importances[col][n] = importance
+
+        cols = []
+        cols_all = []
+        tree_all = []
+        tree_median = []
+        tree_lower_conf_limit = []
+        tree_upper_conf_limit = []
+        for col, importances in tree_feature_importances.items():
+            cols.append(col)
+            tree_median.append(np.median(importances))
+            tree_lower_conf_limit.append(np.percentile(importances, 2.5))
+            tree_upper_conf_limit.append(np.percentile(importances, 97.5))
+            for importance in importances:
+                cols_all.append(col)
+                tree_all.append(importance)
 
         plt.clf()
-        barplot = sns.barplot(x=self.features, y=feature_importances)
-        plt.xticks(
-            np.arange(len(self.features)), self.features, rotation='vertical'
-        )
-        plt.savefig('{}/Tree_feature_importances_barplot.svg'.format(
-            self.results_dir
+        plt.figure(figsize=(15,6))
+        sns.barplot(x=cols, y=tree_median)
+        sns.stripplot(x=cols, y=tree_lower_conf_limit, edgecolor='k',
+                      linewidth=1, s=6, jitter=False)
+        sns.stripplot(x=cols, y=tree_upper_conf_limit, edgecolor='k',
+                      linewidth=1, s=6, jitter=False)
+        plt.xticks(np.arange(len(cols)), cols, rotation='vertical')
+        plt.xlabel('Barrel')
+        plt.ylabel('Importance')
+        plt.savefig('{}/{}Tree_feat_importance_percentiles.svg'.format(
+            self.results_dir, plt_name
         ))
         plt.show()
 
-        feat_importances_df = pd.DataFrame({'Feature': self.features,
-                                            'Score': feature_importances})
+        plt.clf()
+        plt.figure(figsize=(15,6))
+        sns.stripplot(x=cols_all, y=tree_all, edgecolor='k', linewidth=1,
+                      size=2.5, alpha=0.2)
+        plt.xticks(np.arange(len(cols)), cols, rotation='vertical')
+        plt.xlabel('Barrel')
+        plt.ylabel('Importance')
+        plt.savefig('{}/{}Tree_feat_importance_all_data.svg'.format(
+            self.results_dir, plt_name
+        ))
+        plt.show()
 
-        return feat_importances_df
+        importance_df = pd.DataFrame({'Feature': cols,
+                                      'Score': tree_median})
+        importance_df = importance_df.sort_values(
+            by=['Score'], axis=0, ascending=False
+        ).reset_index(drop=True)
 
-    def run_pca(self, x):
+        return importance_df
+
+    def calc_feature_importances_permutation(
+        self, x, y, features, scale, plt_name=''
+    ):
+        """
+        """
+
+        from sklearn.inspection import permutation_importance
+        from sklearn.ensemble import AdaBoostClassifier
+        from sklearn.model_selection import GridSearchCV
+
+        permutation_feature_importances = OrderedDict()
+        for col in features:
+            permutation_feature_importances[col] = [np.nan for n in range(100)]
+
+        for n in range(100):
+            random_rows = []
+            temp_x = pd.DataFrame(
+                data=copy.deepcopy(x), index=None, columns=features
+            )
+            temp_y = pd.DataFrame(
+                data=copy.deepcopy(y), index=None, columns=['Analyte']
+            )
+            for m in range(temp_x.shape[0]):
+                random_rows.append(random.randint(0, (temp_x.shape[0]-1)))
+            temp_x = temp_x.iloc[random_rows,:].reset_index(drop=True)
+            temp_y = temp_y.iloc[random_rows,:].reset_index(drop=True)['Analyte'].tolist()
+
+            if scale is True:
+                temp_x_scaled = RobustScaler().fit_transform(temp_x)
+                temp_x = pd.DataFrame(temp_x_scaled, index=None, columns=features)
+
+            ada_boost = AdaBoostClassifier()
+            parameters = OrderedDict({'n_estimators': [10, 50, 100, 500, 1000]})
+            grid_search = GridSearchCV(
+                estimator=ada_boost, param_grid=parameters, error_score=np.nan,
+                scoring='accuracy'
+            )
+            grid_search.fit(X=x, y=y)
+
+            ada_boost = AdaBoostClassifier(**grid_search.best_params_)
+            ada_boost.fit(temp_x, temp_y)
+            results = permutation_importance(
+                ada_boost, temp_x, temp_y, scoring='accuracy', n_jobs=-1
+            )
+
+            for col, importance in enumerate(results.importances_mean):
+                col = features[col]
+                permutation_feature_importances[col][n] = importance
+
+        cols = []
+        cols_all = []
+        permutation_all = []
+        permutation_median = []
+        permutation_lower_conf_limit = []
+        permutation_upper_conf_limit = []
+        for col, importances in permutation_feature_importances.items():
+            cols.append(col)
+            permutation_median.append(np.median(importances))
+            permutation_lower_conf_limit.append(np.percentile(importances, 2.5))
+            permutation_upper_conf_limit.append(np.percentile(importances, 97.5))
+            for importance in importances:
+                cols_all.append(col)
+                permutation_all.append(importance)
+
+        plt.clf()
+        plt.figure(figsize=(15,6))
+        sns.barplot(x=cols, y=permutation_median)
+        sns.stripplot(x=cols, y=permutation_lower_conf_limit, edgecolor='k',
+                      linewidth=1, s=6, jitter=False)
+        sns.stripplot(x=cols, y=permutation_upper_conf_limit, edgecolor='k',
+                      linewidth=1, s=6, jitter=False)
+        plt.xticks(np.arange(len(cols)), cols, rotation='vertical')
+        plt.xlabel('Barrel')
+        plt.ylabel('Importance')
+        plt.savefig('{}/{}Permutation_feat_importance_percentiles.svg'.format(
+            self.results_dir, plt_name
+        ))
+        plt.show()
+
+        plt.clf()
+        plt.figure(figsize=(15,6))
+        sns.stripplot(x=cols_all, y=permutation_all, edgecolor='k', linewidth=1,
+                      size=2.5, alpha=0.2)
+        plt.xticks(np.arange(len(cols)), cols, rotation='vertical')
+        plt.xlabel('Barrel')
+        plt.ylabel('Importance')
+        plt.savefig('{}/{}Permutation_feat_importance_all_data.svg'.format(
+            self.results_dir, plt_name
+        ))
+        plt.show()
+
+    def run_pca(self, x, scale):
         """
         Runs Principal Component Analysis and makes scatter plot of number of
         components vs. amount of information captured
@@ -466,6 +670,10 @@ class RunML(DefData):
         """
 
         from sklearn.decomposition import PCA
+        from sklearn.preprocessing import RobustScaler
+
+        if scale is True:
+            x = RobustScaler().fit_transform(x)
 
         model = PCA()
         model.fit(x)
@@ -504,19 +712,19 @@ class RunML(DefData):
         """
 
         if type(clf).__name__ == 'LogisticRegression':
-            params = {'n_jobs': -1}
+            params = OrderedDict({'n_jobs': -1})
         elif type(clf).__name__ == 'KNeighborsClassifier':
-            params = {'metric': 'minkowski',
-                      'n_jobs': -1}
+            params = OrderedDict({'metric': 'minkowski',
+                                  'n_jobs': -1})
         elif type(clf).__name__ == 'LinearSVC':
-            params = {'dual': False}  # Change back to True (= default) if
-            # n_samples < n_features
+            params = OrderedDict({'dual': False})  # Change back to True
+            # (= default) if n_samples < n_features
         elif type(clf).__name__ == 'SVC':
-            params = {}
+            params = OrderedDict()
         elif type(clf).__name__ == 'RandomForestClassifier':
-            params = {'n_jobs': -1}
+            params = OrderedDict({'n_jobs': -1})
         elif type(clf).__name__ == 'GaussianNB':
-            params = {}
+            params = OrderedDict()
 
         return params
 
@@ -543,10 +751,12 @@ class RunML(DefData):
 
         shape = x_train.shape[0]
         if type(clf).__name__ == 'LogisticRegression':
-            params = {'penalty': ['l1', 'l2'],
-                      'solver': ['liblinear', 'sag', 'saga', 'newton-cg', 'lbfgs'],
-                      'multi_class': ['ovr', 'multinomial'],
-                      'C': np.logspace(-3, 5, 17)}
+            params = OrderedDict({
+                'penalty': ['l1', 'l2'],
+                'solver': ['liblinear', 'sag', 'saga', 'newton-cg', 'lbfgs'],
+                'multi_class': ['ovr', 'multinomial'],
+                'C': np.logspace(-3, 5, 17)
+            })
         elif type(clf).__name__ == 'KNeighborsClassifier':
             if (1/n_folds)*shape < 2:
                 raise AlgorithmError(
@@ -554,17 +764,22 @@ class RunML(DefData):
                 )
             else:
                 neighbours = np.array(range(2, int((1/n_folds)*shape), 1))
-                params = {'n_neighbors': neighbours,
-                          'weights': ['uniform', 'distance'],
-                          'p': np.array([1, 2])}
+                params = OrderedDict({
+                    'n_neighbors': neighbours,
+                    'weights': ['uniform', 'distance'],
+                    'p': np.array([1, 2])
+                })
         elif type(clf).__name__ == 'LinearSVC':
-            params = {'C': np.logspace(-5, 15, num=41, base=2)}
+            params = OrderedDict({'C': np.logspace(-5, 15, num=41, base=2)})
         elif type(clf).__name__ == 'SVC':
             # For speed reasons (some kernels take a prohibitively long time to
             # train) am sticking with the default kernel ('rbf')
-            params = {'C': np.logspace(-5, 15, num=41, base=2),
-                      'gamma': np.logspace(-15, 3, num=37, base=2)}
+            params = OrderedDict({
+                'C': np.logspace(-5, 15, num=41, base=2),
+                'gamma': np.logspace(-15, 3, num=37, base=2)
+            })
         elif type(clf).__name__ == 'RandomForestClassifier':
+            # FIX - CHANGE RANDOM FOREST CLASSIFIER TO ADABOOST CLASSIFIER, AS THE FORMER TAKES TOO LONG TO RUN
             if (1/n_folds)*shape < 2:
                 raise AlgorithmError(
                     'Too few data points in dataset to use random forest '
@@ -580,11 +795,13 @@ class RunML(DefData):
                     int(x) for x in
                     np.linspace(2, int((1/n_folds)*0.5*shape), int((1/n_folds)*0.5*shape) - 1)
                 ])
-                params = {'n_estimators': n_estimators,
-                          'min_samples_split': min_samples_split,
-                          'min_samples_leaf': min_samples_leaf}
+                params = OrderedDict({
+                    'n_estimators': n_estimators,
+                    'min_samples_split': min_samples_split,
+                    'min_samples_leaf': min_samples_leaf
+                })
         elif type(clf).__name__ == 'GaussianNB':
-            params = {}
+            params = OrderedDict()
 
         return params
 
@@ -739,8 +956,8 @@ class RunML(DefData):
                                     ('resampling', resampling_obj),
                                     (type(clf).__name__, clf)])
 
-        params = {'{}__{}'.format(type(clf).__name__, key): val
-                  for key, val in params.items()}
+        params = OrderedDict({'{}__{}'.format(type(clf).__name__, key): val
+                              for key, val in params.items()})
 
         random_search = RandomizedSearchCV(
             estimator=std_pca_clf, param_distributions=params, n_iter=n_iter,
@@ -828,8 +1045,8 @@ class RunML(DefData):
                                     ('resampling', resampling_obj),
                                     (type(clf).__name__, clf)])
 
-        params = {'{}__{}'.format(type(clf).__name__, key): val
-                  for key, val in params.items()}
+        params = OrderedDict({'{}__{}'.format(type(clf).__name__, key): val
+                              for key, val in params.items()})
 
         grid_search = GridSearchCV(
             estimator=std_pca_clf, param_grid=params, scoring=scoring_func,
@@ -880,7 +1097,7 @@ class RunML(DefData):
         """
 
         from imblearn.pipeline import Pipeline
-        from sklearn.preprocessing import StandardScaler
+        from sklearn.preprocessing import RobustScaler
         from sklearn.decomposition import PCA
         from sklearn.model_selection import cross_val_score
 
@@ -890,7 +1107,7 @@ class RunML(DefData):
         feature_selection = ManualFeatureSelection(
             all_features=self.features, selected_features=selected_features
         )
-        standardisation = StandardScaler()
+        standardisation = RobustScaler()
         if n_components_pca is None:
             std_pca_clf = Pipeline([('feature_selection', feature_selection),
                                     ('std', standardisation),
@@ -946,7 +1163,7 @@ class RunML(DefData):
         predictions = clf.predict(X=x_test)
 
         # Calculates selected scoring metrics
-        test_scores = {}
+        test_scores = OrderedDict()
         for func, params in test_scoring_funcs.items():
             if func.__name__ == 'cohen_kappa_score':
                 params['y1'] = y_test
@@ -975,7 +1192,8 @@ class RunML(DefData):
                 sns.heatmap(
                     data=confusion_matrix(y_true=y_test, y_pred=predictions,
                                           labels=labels, normalize=method),
-                    cmap='RdBu_r', annot=True, xticklabels=True, yticklabels=True
+                    cmap='RdBu_r', annot=True, xticklabels=True,
+                    yticklabels=True, fmt='.3f'
                 )
                 ax = plt.gca()
                 ax.set(xticklabels=labels, yticklabels=labels, xlabel='Predicted label',
@@ -1235,12 +1453,13 @@ class RunML(DefData):
                 cv_folds_inner_loop, draw_conf_mat
             )
             nested_cv_search['inner_loop_searches'].append(search)
-            best_params = {key.split('__')[1]: val
-                           for key, val in search.best_params_.items()}
+            best_params = OrderedDict({
+                key.split('__')[1]: val for key, val in search.best_params_.items()
+            })
             # Train clf with best hyperparameter selection on training split,
             # then make predictions and calculate selected statistics on test
             # split
-            best_params = {**fixed_params, **best_params}
+            best_params = OrderedDict({**fixed_params, **best_params})
             test_clf = clf(**best_params)
             split_search, split_test_scores, split_predictions = self.run_ml(
                 test_clf, x_train, y_train, train_groups, x_test, y_test,
@@ -1259,13 +1478,13 @@ class RunML(DefData):
 
         # Calculate average, standard deviation and percentiles of interest
         # across cv_folds_outer_loop folds
-        nested_cv_search['average_test_scores'] = {}
+        nested_cv_search['average_test_scores'] = OrderedDict()
         for scoring_func_name, score_list in nested_cv_search['test_scores'].items():
             nested_cv_search['average_test_scores'][scoring_func_name] = np.mean(score_list)
-        nested_cv_search['std_test_scores'] = {}
+        nested_cv_search['std_test_scores'] = OrderedDict()
         for scoring_func_name, score_list in nested_cv_search['test_scores'].items():
             nested_cv_search['std_test_scores'][scoring_func_name] = np.std(score_list, ddof=0)  # Population standard deviation
-        nested_cv_search['percentile_test_scores'] = {}
+        nested_cv_search['percentile_test_scores'] = OrderedDict()
         for scoring_func_name, score_list in nested_cv_search['test_scores'].items():
             nested_cv_search['percentile_test_scores'][scoring_func_name] = [
                 np.percentile(score_list, 2.5), np.percentile(score_list, 50),

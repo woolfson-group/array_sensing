@@ -6,6 +6,7 @@
 import copy
 import math
 import os
+import pickle
 import shutil
 import matplotlib.pyplot as plt
 import numpy as np
@@ -251,7 +252,7 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
 
 
 def draw_scatter_plot(
-    grouped_fluor_data, results_dir, features, analytes, repeat_id
+    grouped_fluor_data, results_dir, features, analytes, repeat_id, test=False
 ):
     """
     Generates strip plot showing variation in repeated data points for each
@@ -268,6 +269,8 @@ def draw_scatter_plot(
     - analytes: List of analytes to include in the plot
     - repeat_id: Unique identifier of the repeat into which the data has been
     grouped
+    - test: Boolean describing whether the function is being run during the
+    program's unit tests - by default is set to False
     """
 
     repeat_id = repeat_id.replace('.xlsx', '')
@@ -275,18 +278,48 @@ def draw_scatter_plot(
         repeat_id, results_dir.split('/')[-1]
     ))
 
+    if features == []:
+        raise ValueError('List of peptides to include in the plot is empty')
+    if analytes == []:
+        raise ValueError('List of analytes to include in the plot is empty')
+
     plot_data = OrderedDict()
     for analyte, analyte_df in copy.deepcopy(grouped_fluor_data).items():
         if analyte in analytes:
             extra_column = pd.DataFrame({'Analyte': [analyte]*analyte_df.shape[0]})
-            analyte_df = pd.concat(
-                [analyte_df[features], extra_column], axis=1
-            ).reset_index(drop=True)
-            plot_data[analyte] = analyte_df
+            try:
+                analyte_df = pd.concat(
+                    [analyte_df[features], extra_column], axis=1
+                ).reset_index(drop=True)
+                plot_data[analyte] = analyte_df
+            except KeyError:
+                pass
     plot_df = pd.concat(plot_data.values(), axis=0).reset_index(drop=True)
     plot_df = pd.melt(
         plot_df, id_vars='Analyte', var_name='Peptide', value_name='Reading'
     ).reset_index(drop=True)
+
+    value_check = plot_df[['Reading']].applymap(lambda x: isinstance(x, (int, float)))
+    value_check = value_check.all(axis=None, skipna=False)
+    if value_check is np.bool_(False):
+        raise ValueError(
+            'Non-numeric value found in input dataframe for {}'.format(repeat_id)
+        )
+    for feature in features:
+        if not feature in plot_df['Peptide'].tolist():
+            raise ValueError(
+                'Peptide {} not present in the input data for '
+                '{}'.format(feature, repeat_id)
+            )
+    for analyte in analytes:
+        if not analyte in plot_df['Analyte'].tolist():
+            raise ValueError(
+                'Analyte {} not present in the input data for '
+                '{}'.format(analyte, repeat_id)
+            )
+
+    if test is True:
+        plot_df.to_pickle('{}/Plot_data.pkl'.format(results_dir))
 
     # Sorts analytes into order. Assumes that if there are multiple dilutions
     # for a particular analyte, dilution Y is labelled as 'AnalyteX_Y'
@@ -312,6 +345,9 @@ def draw_scatter_plot(
         val_list = sorted(end_analytes[key])
         for val in val_list:
             sorted_analytes.append('{}_{}'.format(key, val))
+    if test is True:
+        with open('{}/Sorted_analytes.pkl'.format(results_dir), 'wb') as f:
+            pickle.dump((sorted_analytes), f)
 
     # Draws stripplot of data points
     plt.clf()
@@ -324,7 +360,8 @@ def draw_scatter_plot(
     plt.ylabel('Reading')
     plt.xticks(rotation=90)
     plt.savefig('{}/{}_data_spread.svg'.format(results_dir, repeat_id))
-    plt.show()
+    if test is False:
+        plt.show()
 
 
 def check_for_saturation(
@@ -362,7 +399,7 @@ def check_for_saturation(
     return saturated_readings
 
 def highlight_outliers(
-    plate_df, remove_outliers, plate_outliers=[], alpha=0.05, drop_thresh=2,
+    plate_df, remove_outliers, plate_outliers=None, alpha=0.05, drop_thresh=2,
     user_k_max=np.nan
 ):
     """
@@ -391,6 +428,9 @@ def highlight_outliers(
     outlier reading on that plate (=keys), updated now to contain any outliers
     in the input dataframe of fluorescence readings (plate_df)
     """
+
+    if plate_outliers is None:
+        plate_outliers = []
 
     plate_df = plate_df.reset_index(drop=True)
     if plate_df.empty:
@@ -672,38 +712,6 @@ def scale_min_max(
     return scaled_plate, plate_outliers
 
 
-class DefData():
-
-    def __init__(self, results_dir):
-        """
-        - results_dir: Path (either absolute or relative) to directory where
-        output files should be saved. This directory will be created by the
-        program and so should not already exist.
-        """
-
-        if not os.path.isdir(results_dir):
-            os.makedirs(results_dir)
-        else:
-            print('Directory {} already found in {}'.format(results_dir, os.getcwd()))
-            remove = ''
-            while not isinstance(remove, bool):
-                remove = input('Overwrite {}?'.format(results_dir))
-                if remove.strip().lower() in ['true', 'yes', 'y']:
-                    remove = True
-                elif remove.strip().lower() in ['false', 'no', 'n']:
-                    remove = False
-                else:
-                    print('Input not recognised - please specify "yes" or "no"')
-                    remove = ''
-            if remove is True:
-                shutil.rmtree(results_dir)
-                os.mkdir(results_dir)
-            else:
-                print('Please specify a unique directory name for results to be '
-                      'stored in')
-        self.results_dir = results_dir.rstrip('/')
-
-
 def draw_heatmap_fingerprints(
     fluor_df, results_dir, scale, class_order=None, prefix=''
 ):
@@ -807,7 +815,8 @@ def draw_heatmap_fingerprints(
 
 
 def draw_boxplots(
-    fluor_df, results_dir, scale, cushion, class_order=None, prefix=''
+    fluor_df, results_dir, scale, cushion, class_order=None, prefix='',
+    test=False
 ):
     """
     Draw a boxplot representing the range of readings for each analyte
@@ -827,12 +836,16 @@ def draw_boxplots(
     determine the analytes present (and plot them in the order obtained using
     the sorted() function)
     - prefix: Prefix to add to the file names of saved plots
+    - test: Boolean describing whether the function is being run during the
+    program's unit tests - by default is set to False
     """
 
+    # Tests that input arguments are suitable for running the function
     if not os.path.isdir(results_dir):
         raise FileNotFoundError(
             'Directory {} does not exist'.format(results_dir)
         )
+
     if os.path.isdir('{}/Boxplots'.format(results_dir)):
         raise FileExistsError(
             'Directory {} exists - please rename this directory if you wish to '
@@ -841,10 +854,13 @@ def draw_boxplots(
         )
     os.mkdir('{}/Boxplots'.format(results_dir))
 
+    if not 'Analyte' in fluor_df.columns:
+        raise KeyError('No \'Analyte\' column in input dataframe')
+
     classes = sorted([analyte for analyte in set(fluor_df['Analyte'].tolist())])
     if not class_order is None:
         if classes != sorted(class_order):
-            raise Exception(
+            raise ValueError(
                 'Expect class_order to be a list of analytes including every '
                 'analyte in the dataset once. Instead is set to:\n'
                 '{}',format(class_order)
@@ -852,19 +868,49 @@ def draw_boxplots(
         else:
             classes = class_order
 
-    cols = [col for col in fluor_df.columns if col != 'Analyte']
+    if not isinstance(cushion, (int, float)):
+        raise ValueError(
+            'Unexpected value for cushion: {}\nExpect an integer or a '
+            'float.'.format(cushion)
+        )
 
+    if not isinstance(scale, bool):
+        raise ValueError(
+            'Expect Boolean (True/False) input for whether or not to scale the '
+            'data, instead have {}, type {}'.format(scale, type(scale))
+        )
+
+    if fluor_df.isna().any(axis=None, skipna=False) is np.bool_(True):
+        raise ValueError(
+            'NaN reading(s) found in input dataframe:\n'.format(fluor_df)
+        )
+
+    sub_fluor_df = copy.deepcopy(fluor_df).drop('Analyte', axis=1)
+    if sub_fluor_df.applymap(
+        lambda x: isinstance(x, (int, float))).all(axis=None, skipna=False
+    ) is np.bool_(False):
+        raise ValueError(
+            'Non-numeric value in input dataframe - expect all values in input'
+            ' dataframe to be integers / floats:\n{}'.format(sub_fluor_df)
+        )
+
+    if np.isinf(sub_fluor_df.values).any(axis=None) is np.bool_(True):
+        raise ValueError(
+            'Infinite reading(s) found in input dataframe:\n'.format(fluor_df)
+        )
+
+    # Generates plots
+    cols = [col for col in fluor_df.columns if col != 'Analyte']
+    df_dict = OrderedDict({'Original_data': copy.deepcopy(fluor_df)})
     if scale is True:
         scaled_df = RobustScaler().fit_transform(
             copy.deepcopy(fluor_df)[cols]
         )
         scaled_df = pd.DataFrame(scaled_df, columns=cols)
         scaled_df = pd.concat([scaled_df, fluor_df[['Analyte']]], axis=1)
-
-    df_dict = OrderedDict({'Original_data': copy.deepcopy(fluor_df)})
-    if scale is True:
         df_dict['Scaled_data'] = scaled_df
 
+    test_results = OrderedDict({'All_data': df_dict})
     for label, df in df_dict.items():
         print('\n\n\n{}:\n'.format(label))
 
@@ -875,6 +921,8 @@ def draw_boxplots(
             copy.deepcopy(df), id_vars='Analyte', var_name='Barrel',
             value_name='Reading'
         )
+        test_results[label] = [ymin, ymax, melt_df]
+
         sns.set(rc={'figure.figsize':(15,6)})
         plt.clf()
         plt.xticks(rotation=90)
@@ -886,7 +934,8 @@ def draw_boxplots(
         plt.savefig('{}/Boxplots/{}{}_barrel_readings_boxplot.svg'.format(
             results_dir, prefix, label
         ))
-        plt.show()
+        if test is False:
+            plt.show()
 
         for class_name in classes:
             print(class_name)
@@ -904,7 +953,43 @@ def draw_boxplots(
             plt.savefig('{}/Boxplots/{}{}_{}_barrel_readings_boxplot.svg'.format(
                 results_dir, prefix, label, class_name
             ))
-            plt.show()
+            if test is False:
+                plt.show()
+
+    if test is True:
+        return test_results
+
+
+class DefData():
+
+    def __init__(self, results_dir):
+        """
+        - results_dir: Path (either absolute or relative) to directory where
+        output files should be saved. This directory will be created by the
+        program and so should not already exist.
+        """
+
+        if not os.path.isdir(results_dir):
+            os.makedirs(results_dir)
+        else:
+            print('Directory {} already found in {}'.format(results_dir, os.getcwd()))
+            remove = ''
+            while not isinstance(remove, bool):
+                remove = input('Overwrite {}?'.format(results_dir))
+                if remove.strip().lower() in ['true', 'yes', 'y']:
+                    remove = True
+                elif remove.strip().lower() in ['false', 'no', 'n']:
+                    remove = False
+                else:
+                    print('Input not recognised - please specify "yes" or "no"')
+                    remove = ''
+            if remove is True:
+                shutil.rmtree(results_dir)
+                os.mkdir(results_dir)
+            else:
+                print('Please specify a unique directory name for results to be '
+                      'stored in')
+        self.results_dir = results_dir.rstrip('/')
 
 
 class ParseArrayData(DefData):
@@ -1056,7 +1141,7 @@ class ParseArrayData(DefData):
                 '{} (min) and {} (max)'.format(self.min_fluor, self.max_fluor)
             )
 
-    def group_xlsx_repeats(self, ignore_files=[]):
+    def group_xlsx_repeats(self, ignore_files=None):
         """
         Groups xlsx files in the directories in self.data_dirs_dict into
         independent repeats (via the name of the repeat included at the end of
@@ -1066,6 +1151,9 @@ class ParseArrayData(DefData):
         --------
         - ignore_files: List of files not to be included in the analysis
         """
+
+        if ignore_files is None:
+            ignore_files = []
 
         xlsx_file_dict = OrderedDict()
 
