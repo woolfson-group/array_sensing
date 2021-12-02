@@ -418,6 +418,10 @@ def highlight_outliers(
     - drop_thresh: The minimum number of outlier readings a sample requires to
     be discarded from the dataset (only applied when remove_outliers is set to
     True), default 2
+    - user_k_max: The maximum number of runs of the generalised ESD test (and
+    hence the maximum number of outliers that can be identified) to be performed.
+    By default is set to np.nan, in which case an appropriate value based upon
+    the number of readings is automatically selected
 
     Output
     ----------
@@ -435,6 +439,9 @@ def highlight_outliers(
     plate_df = plate_df.reset_index(drop=True)
     if plate_df.empty:
         raise ValueError('Empty dataframe:\n{}'.format(plate_df))
+
+    if not 'Analyte' in plate_df.columns:
+        raise ValueError('No \'Analyte\' column in input dataframe')
 
     outlier_dict = OrderedDict()
     for index in range(plate_df.shape[0]):
@@ -561,7 +568,8 @@ def calc_median(plate_df, raise_warning):
 
 def scale_min_max(
     scale_method, plate, plate_name, no_pep, split_name, cols_ignore,
-    plate_outliers, outlier_excl_thresh=0.05, drop_thresh=2, k_max=np.nan
+    plate_outliers, outlier_excl_thresh=0.05, drop_thresh=2, k_max=np.nan,
+    test=False
 ):
     """
     Scales data on plate between min fluorescence reading and max fluorescence
@@ -595,6 +603,8 @@ def scale_min_max(
     - k_max: The maximum number of outliers to exclude with a generalised ESD
     test. If leave as default np.nan, an appropriate threshold will be selected
     based upon the size of the dataset.
+    - test: Boolean describing whether the function is being run during the
+    program's unit tests - by default is set to False
 
     Output
     ----------
@@ -610,6 +620,29 @@ def scale_min_max(
     except KeyError:
         raise PlateLayoutError('No blank readings (= peptide + fluorophore '
                                'without analyte) included on plate')
+
+    if not scale_method in ['fluorophore', 'analyte_fluorophore']:
+        raise ValueError(
+            'Expect argument "scale_method" to be set to either '
+            '"fluorophore" or "analyte_fluorophore", not '
+            '{}'.format(scale_method)
+        )
+
+    blank_cols = [col.lower().replace(' ', '') for col in blank_data.columns]
+    if not 'analyte' in blank_cols:
+        raise ValueError(
+            '\'Analyte\' column not in input dataframe:\n{}'.format(blank_data)
+        )
+    if not 'plate' in blank_cols:
+        raise ValueError(
+            '\'Plate\' column not in input dataframe:\n{}'.format(blank_data)
+        )
+
+    if blank_data.drop(['Analyte', 'Plate'], axis=1).isna().any(axis=None) is np.bool_(True):
+        raise ValueError(
+            'NaN reading on plate {} for blank readings'.format(plate_name)
+        )
+
     plate_outliers = highlight_outliers(
         blank_data, remove_outliers=False, plate_outliers=plate_outliers,
         alpha=outlier_excl_thresh, drop_thresh=drop_thresh,
@@ -632,6 +665,21 @@ def scale_min_max(
                 )
             )
 
+        plate_cols = [col.lower().replace(' ', '') for col in fluor_data.columns]
+        if not 'analyte' in plate_cols:
+            raise ValueError(
+                '\'Analyte\' column not in input dataframe:\n{}'.format(fluor_data)
+            )
+        if not 'plate' in plate_cols:
+            raise ValueError(
+                '\'Plate\' column not in input dataframe:\n{}'.format(fluor_data)
+            )
+
+        if fluor_data.drop(['Analyte', 'Plate'], axis=1).isna().any(axis=None) is np.bool_(True):
+            raise ValueError(
+                'NaN reading on plate {} for {} readings'.format(plate_name, analyte)
+            )
+
         # Checks that fluorescence of analyte + DPH is lower than all analyte +
         # DPH + peptide combinations (except for peptides in cols_ignore). Won't
         # work for any NaN median values, but these will be dealt with at a
@@ -650,10 +698,18 @@ def scale_min_max(
                 if fluor_analyte_pep > min_fluor_analyte:
                     continue
                 else:
-                    print('\x1b[31m WARNING - fluorescence of ({} + {} + DPH) '
-                          'is less than fluorescence of ({} + DPH) alone. '
-                          'Analysis will continue but please CHECK YOUR DATA. '
-                          '\033[0m'.format(analyte, peptide, analyte))
+                    if test is True:
+                        raise ValueError(
+                            'Median fluorescence of ({} + {} + DPH) is less '
+                            'than fluorescence of ({} + DPH) alone on plate '
+                            '{}'.format(analyte, peptide, analyte, plate_name)
+                        )
+                    else:
+                        print('\x1b[31m WARNING - median fluorescence of ({} + '
+                              '{} + DPH) is less than fluorescence of ({} + '
+                              'DPH) alone on plate {}. Analysis will continue '
+                              'but please CHECK YOUR DATA.\033'
+                              '[0m'.format(analyte, peptide, analyte, plate_name))
 
         # Performs min max scaling for each feature
         for index_c, peptide in enumerate(list(fluor_data.columns)):
@@ -668,12 +724,6 @@ def scale_min_max(
                     min_fluor_numerator = blank_data[no_pep][0]
                 elif scale_method == 'analyte_fluorophore':
                     min_fluor_numerator = median_fluor_data[no_pep][0]
-                else:
-                    raise ValueError(
-                        'Expect argument "scale_method" to be set to either '
-                        '"fluorophore" or "analyte_fluorophore", not '
-                        '{}'.format(scale_method)
-                    )
 
                 for index_r, reading in enumerate(fluor_data[peptide].tolist()):
                     if (max_fluor-min_fluor_demoninator) > 0:
@@ -713,7 +763,7 @@ def scale_min_max(
 
 
 def draw_heatmap_fingerprints(
-    fluor_df, results_dir, scale, class_order=None, prefix=''
+    fluor_df, results_dir, scale, class_order=None, prefix='', test=False
 ):
     """
     Draw a heatmap for each analyte representing the median reading for each
@@ -732,6 +782,8 @@ def draw_heatmap_fingerprints(
     determine the analytes present (and plot them in the order obtained using
     the sorted() function)
     - prefix: Prefix to add to the file names of saved plots
+    - test: Boolean describing whether the function is being run during the
+    program's unit tests - by default is set to False
     """
 
     if not os.path.isdir(results_dir):
@@ -746,30 +798,64 @@ def draw_heatmap_fingerprints(
         )
     os.mkdir('{}/Heatmap_plots'.format(results_dir))
 
+    if not 'Analyte' in fluor_df.columns:
+        raise KeyError('No \'Analyte\' column in input dataframe')
+
     classes = sorted([analyte for analyte in set(fluor_df['Analyte'].tolist())])
     if not class_order is None:
-        if classes != sorted(class_order):
-            raise Exception(
+        try:
+            class_order = sorted(class_order)
+            if classes != sorted(class_order):
+                raise ValueError(
+                    'Expect class_order to be a list of analytes including every '
+                    'analyte in the dataset once. Instead is set to:\n'
+                    '{}'.format(class_order)
+                )
+            else:
+                classes = class_order
+        except TypeError:
+            raise ValueError(
                 'Expect class_order to be a list of analytes including every '
                 'analyte in the dataset once. Instead is set to:\n'
-                '{}',format(class_order)
+                '{}'.format(class_order)
             )
-        else:
-            classes = class_order
+
+    if not isinstance(scale, bool):
+        raise ValueError(
+            'Expect Boolean (True/False) input for whether or not to scale the '
+            'data, instead have {}, type {}'.format(scale, type(scale))
+        )
+
+    if fluor_df.isna().any(axis=None, skipna=False) is np.bool_(True):
+        raise ValueError(
+            'NaN reading(s) found in input dataframe:\n{}'.format(fluor_df)
+        )
+
+    sub_fluor_df = copy.deepcopy(fluor_df).drop('Analyte', axis=1)
+    if sub_fluor_df.applymap(
+        lambda x: isinstance(x, (int, float))).all(axis=None, skipna=False
+    ) is np.bool_(False):
+        raise ValueError(
+            'Non-numeric value in input dataframe - expect all values in input'
+            ' dataframe to be integers / floats:\n{}'.format(sub_fluor_df)
+        )
+
+    if np.isinf(sub_fluor_df.values).any(axis=None) is np.bool_(True):
+        raise ValueError(
+            'Infinite reading(s) found in input dataframe:\n'.format(fluor_df)
+        )
 
     cols = [col for col in fluor_df.columns if col != 'Analyte']
-
+    df_dict = OrderedDict({'Original_data': copy.deepcopy(fluor_df)})
     if scale is True:
         scaled_df = RobustScaler().fit_transform(
             copy.deepcopy(fluor_df)[cols]
         )
         scaled_df = pd.DataFrame(scaled_df, columns=cols)
         scaled_df = pd.concat([scaled_df, fluor_df[['Analyte']]], axis=1)
-
-    df_dict = OrderedDict({'Original_data': copy.deepcopy(fluor_df)})
-    if scale is True:
         df_dict['Scaled_data'] = scaled_df
 
+    test_results = OrderedDict({'All_data': df_dict})
     for label, df in df_dict.items():
         print('\n\n\n{}:\n'.format(label))
 
@@ -794,6 +880,7 @@ def draw_heatmap_fingerprints(
                 if np.amax(median_class_df) > class_median_x_val['max']:
                     class_median_x_val['max'] = np.amax(median_class_df)
 
+        test_results[label] = class_median_x_val
         for class_name in classes:
             print('\n{}'.format(class_name))
 
@@ -811,7 +898,11 @@ def draw_heatmap_fingerprints(
                     results_dir, prefix, label, class_name
                 )
             )
-            plt.show()
+            if test is False:
+                plt.show()
+
+    if test is True:
+        return test_results
 
 
 def draw_boxplots(
@@ -859,14 +950,22 @@ def draw_boxplots(
 
     classes = sorted([analyte for analyte in set(fluor_df['Analyte'].tolist())])
     if not class_order is None:
-        if classes != sorted(class_order):
+        try:
+            class_order = sorted(class_order)
+            if classes != sorted(class_order):
+                raise ValueError(
+                    'Expect class_order to be a list of analytes including every '
+                    'analyte in the dataset once. Instead is set to:\n'
+                    '{}'.format(class_order)
+                )
+            else:
+                classes = class_order
+        except TypeError:
             raise ValueError(
                 'Expect class_order to be a list of analytes including every '
                 'analyte in the dataset once. Instead is set to:\n'
-                '{}',format(class_order)
+                '{}'.format(class_order)
             )
-        else:
-            classes = class_order
 
     if not isinstance(cushion, (int, float)):
         raise ValueError(
@@ -882,7 +981,7 @@ def draw_boxplots(
 
     if fluor_df.isna().any(axis=None, skipna=False) is np.bool_(True):
         raise ValueError(
-            'NaN reading(s) found in input dataframe:\n'.format(fluor_df)
+            'NaN reading(s) found in input dataframe:\n{}'.format(fluor_df)
         )
 
     sub_fluor_df = copy.deepcopy(fluor_df).drop('Analyte', axis=1)
