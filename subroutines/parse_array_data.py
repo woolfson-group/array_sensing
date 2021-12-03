@@ -46,6 +46,11 @@ def trim_dataframe(label_df, plate_path):
     and/or columns appended to its bottom and/or right hand side
     """
 
+    if label_df.empty is True:
+        raise PlateLayoutError(
+            'Empty dataframe passed to trim_dataframe from {}'.format(plate_path)
+        )
+
     label_df = label_df.reset_index(drop=True)
 
     row_index = ''
@@ -90,6 +95,7 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
     Input
     ----------
     - plate_path: File path to input xlsx file
+    - split:
     - peptide_dict: Dictionary of lists of all peptides to be included in the
     analysis for each split
     - gain: Which dataframe of fluorescence data (collected at different gains)
@@ -101,29 +107,47 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
     input xlsx file (i.e. with no further processing or reorganisation)
     - grouped_fluor_data: Dictionary of dataframes of fluorescence readings for
     each analyte
+    - peptide_list:
     """
 
     print('Parsing plate {}'.format(plate_path))
 
     # Determines which table of fluorescence data (collected at different
     # gains with the fluorimeter) to use. By default uses the first listed.
-    if (
-           (type(gain) != int)
-        or (type(gain) == int and gain <= 0)
-    ):
-        raise TypeError('Gain value not recognised. Please specify a positive'
-                        ' integer')
+    if type(gain) != int:
+        raise TypeError(
+            'Gain value not recognised. Please specify a positive integer'
+        )
+    elif (type(gain) == int) and (gain <= 0):
+        raise ValueError(
+            'Gain value not recognised. Please specify a positive integer'
+        )
+
+    if not os.path.isfile(plate_path):
+        raise FileNotFoundError('File {} doesn\'t exist'.format(plate_path))
 
     # Reads analyte labels from metadata in "Protocol Information" sheet
-    protocol_df = pd.read_excel(
-        plate_path, sheet_name='Protocol Information', header=None, index_col=0
-    )
+    try:
+        protocol_df = pd.read_excel(
+            plate_path, sheet_name='Protocol Information', header=None, index_col=0,
+            dtype=str
+        )
+    except ValueError:
+        raise ValueError(
+            '"Protocol Information" sheet not found in {}'.format(plate_path)
+        )
     protocol_df_index = [str(x).lower().replace(' ', '')
                          for x in protocol_df.index.tolist()]
-    start_row = protocol_df_index.index('platelayout')
+    start_row = np.nan
+    try:
+        start_row = protocol_df_index.index('platelayout')
+    except ValueError:
+        raise ValueError(
+            '"Plate Layout" information not found on Protocol Information sheet'
+        )
     label_df = pd.read_excel(
         plate_path, sheet_name='Protocol Information', header=None,
-        skiprows=start_row+2, index_col=0
+        skiprows=start_row+2, index_col=0, dtype=str
     ).reset_index(drop=True)
     label_df = trim_dataframe(label_df, plate_path)
     label_df = label_df.replace(
@@ -132,20 +156,27 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
     label_array = copy.deepcopy(label_df).to_numpy()
     # Removes NaN values from label_set
     label_set = []
-    for label in list(set(label_array.flatten('C'))):  # Flattens in row-major
+    for label in label_array.flatten('C'):  # Flattens in row-major
     # style, i.e. np.array([[1, 2], [3, 4]]) => array([1, 2, 3, 4])
         if type(label) == str:
-            label_set.append(label)
+            if not label in label_set:
+                label_set.append(label)
         elif type(label) in [int, float]:
-            if not np.isnan(label):
+            if (not np.isnan(label)) and (not str(label) in label_set):
                 label_set.append(str(label))
 
     # Reads peptide layout and names from metadata in "Protocol Information"
     # sheet
-    start_row = protocol_df_index.index('peptidelayout')
+    start_row = np.nan
+    try:
+        start_row = protocol_df_index.index('peptidelayout')
+    except ValueError:
+        raise ValueError(
+            '"Peptide Layout" information not found on Protocol Information sheet'
+        )
     peptide_arrang = pd.read_excel(
         plate_path, sheet_name='Protocol Information', header=None,
-        skiprows=start_row+1, index_col=None
+        skiprows=start_row+1, index_col=None, dtype=str
     ).reset_index(drop=True)
     peptide_arrang = trim_dataframe(peptide_arrang, plate_path)
     r_dim = peptide_arrang.shape[0]
@@ -156,11 +187,20 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
 
     # Checks that peptides listed in the xlsx file are the same as those input
     # by the user, and that there are no repeated peptides
+    plate_peptides_no_nan = []
+    for peptide in plate_peptides:
+        if type(peptide) is float:
+            if np.isnan(peptide):
+                pass
+            else:
+                plate_peptides_no_nan.append(peptide)
+        else:
+            plate_peptides_no_nan.append(peptide)
     peptide_list = []
     for fluorophore, sub_peptide_list in peptide_dict.items():
         if (
                 (split == fluorophore)
-            and (sorted(sub_peptide_list) == sorted(plate_peptides))
+            and (sorted(sub_peptide_list) == sorted(plate_peptides_no_nan))
         ):
             peptide_list = ['{}_{}'.format(fluorophore, peptide)
                             for peptide in sub_peptide_list]
@@ -175,33 +215,51 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
             if plate_peptides.count(peptide) > 1 and not peptide in multi_peptides:
                 multi_peptides.append(peptide)
         raise PlateLayoutError(
-            'Peptide(s)\n{}\nlisted more than once in plate layout listed in {}'.format(
+            'Peptide(s)\n{}\nlisted more than once in plate layout from {}'.format(
                 multi_peptides, plate_path
             )
         )
+    # This check shouldn't be needed, since if have already checked that the
+    # peptide list provided by the user matches that parsed in from the xlsx
+    # file, and that there are no repeated peptides in the list parsed in from
+    # the xlsx file, then logically there cannot be any repeated peptides in the
+    # user-specified list. However, have included this check anyway just in case
+    # the tests above are altered, to ensure that the code continues to check
+    # for repeat readings in the user-specified list.
     if len(set(peptide_list)) != len(peptide_list):
-        raise Exception(
+        raise PlateLayoutError(
             'One or more peptides specified for split {} listed more than '
             'once:\n{}'.format(fluorophore, peptide_list)
         )
 
     # Reads fluorescence data from "End point" sheet. Calculates plate
     # dimensions from analyte label and peptide layout dataframes
-    plate_df = pd.read_excel(
-        plate_path, sheet_name='End point', header=None, index_col=1
-    )
+    try:
+        plate_df = pd.read_excel(
+            plate_path, sheet_name='End point', header=None, index_col=1,
+            dtype=str
+        )
+    except ValueError:
+        raise ValueError(
+            '"End point" sheet not found in {}'.format(plate_path)
+        )
     plate_df_index = [str(x).lower().replace(' ', '')
                       for x in plate_df.index.tolist()]
-    start_row = 0
+    start_row = np.nan
     for index, row in enumerate(plate_df_index):
         if row.startswith('{}.rawdata'.format(gain)):
             start_row = index
             break
+    if np.isnan(start_row):
+        raise ValueError(
+            'Failed to locate plate in {}\n- expect to be marked as e.g. '
+            '"1.rawdata"'.format(plate_path)
+        )
     nrows = r_dim*label_df.shape[0]
     ncols = c_dim*label_df.shape[1]
     fluor_df = pd.read_excel(
         plate_path, sheet_name='End point', skiprows=start_row+1, nrows=nrows,
-        index_col=0, usecols=range(ncols+1)
+        index_col=0, usecols=range(ncols+1), dtype=np.float64
     ).reset_index(drop=True)
 
     # Combines fluorescence data collected for the same analyte into a dataframe
@@ -211,6 +269,10 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
         grouped_fluor_data[analyte] = []
 
     for index, analyte in np.ndenumerate(label_array):
+        if type(analyte) is float:
+            if np.isnan(analyte):
+                continue
+
         index_r = index[0]
         index_c = index[1]
 
@@ -246,6 +308,8 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
         ).transpose().reset_index(drop=True)
         df_columns = ['Plate', 'Analyte'] + peptide_list
         analyte_df.columns = df_columns
+        if analyte_df.isna().any(axis=None) is np.bool_(True):
+            raise ValueError('NaN value detected in {}'.format(plate_path))
         grouped_fluor_data[analyte] = analyte_df
 
     return fluor_df, grouped_fluor_data, peptide_list

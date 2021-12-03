@@ -194,8 +194,8 @@ class RunML(DefData):
 
         subclasses = list(self.groups)
         classes = list(self.y)
-        set_subclasses = list(set(subclasses))
-        set_classes = list(set(classes))
+        set_subclasses = sorted(list(set(subclasses)))
+        set_classes = sorted(list(set(classes)))
 
         # Random split
         if one_of_each is False:

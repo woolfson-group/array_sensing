@@ -27,35 +27,66 @@ class TestClass(unittest.TestCase):
 
         print('Testing trim_dataframe')
 
-        exp_dfs = {'Test_dataframe_1.pkl': pd.DataFrame(np.array([[1.0, 2.0, 3.0],
-                                                                  [4.0, 5.0, 6.0],
-                                                                  [7.0, 8.0, 9.0]])),
-                   'Test_dataframe_2.pkl': pd.DataFrame(np.array([[1.0, 2.0, 3.0],
-                                                                  [4.0, 5.0, 6.0]])),
-                   'Test_dataframe_3.pkl': pd.DataFrame(np.array([[1.0, 2.0],
-                                                                  [4.0, 5.0],
-                                                                  [7.0, 8.0]])),
-                   'Test_dataframe_4.pkl': pd.DataFrame(np.array([[1.0],
-                                                                  [4.0],
-                                                                  [7.0]])),
-                   'Test_dataframe_5.pkl': pd.DataFrame(np.array([[1.0, 2.0, 3.0]])),
-                   'Test_dataframe_6.pkl': pd.DataFrame(np.array([[1.0, np.nan, 3.0],
-                                                                  [np.nan, np.nan, 6.0],
-                                                                  [7.0, 8.0, 9.0]])),
-                   'Test_dataframe_7.pkl': pd.DataFrame(np.array([['1', 2.0]], dtype=object)),
-                   'Test_dataframe_8.pkl': np.nan,
-                   'Test_dataframe_9.pkl': np.nan,
-                   'Test_dataframe_10.pkl': np.nan}
+        exp_input_dict = {
+            1: pd.DataFrame(np.array([[1.0, 2.0, 3.0],
+                                      [4.0, 5.0, 6.0],
+                                      [7.0, 8.0, 9.0]])),
+            2: pd.DataFrame(np.array([[1.0, 2.0, 3.0],
+                                      [4.0, 5.0, 6.0],
+                                      [np.nan, np.nan, np.nan]])),
+            3: pd.DataFrame(np.array([[1.0, 2.0, np.nan],
+                                      [4.0, 5.0, np.nan],
+                                      [7.0, 8.0, np.nan]])),
+            4: pd.DataFrame(np.array([[1.0, np.nan, 3.0],
+                                      [4.0, np.nan, 6.0],
+                                      [7.0, np.nan, 9.0]])),
+            5: pd.DataFrame(np.array([[1.0, 2.0, 3.0],
+                                      [np.nan, np.nan, np.nan],
+                                      [7.0, 8.0, 9.0]])),
+            6: pd.DataFrame(np.array([[1.0, np.nan, 3.0],
+                                      [np.nan, np.nan, 6.0],
+                                      [7.0, 8.0, 9.0]])),
+            7: pd.DataFrame(np.array([['1', 2.0, np.nan],
+                                      [np.nan, np.nan, np.nan],
+                                      [7.0, 8.0, '9']], dtype=object)),
+            8: pd.DataFrame({}),
+            9: pd.DataFrame(np.array([[np.nan, np.nan, np.nan],
+                                      [4.0, 5.0, 6.0],
+                                      [7.0, 8.0, 9.0]])),
+            10: pd.DataFrame(np.array([[np.nan, 2.0, 3.0],
+                                       [np.nan, 5.0, 6.0],
+                                       [np.nan, 8.0, 9.0]]))
+        }
+        exp_results_dict = {
+            1: pd.DataFrame(np.array([[1.0, 2.0, 3.0],
+                                      [4.0, 5.0, 6.0],
+                                      [7.0, 8.0, 9.0]])),
+            2: pd.DataFrame(np.array([[1.0, 2.0, 3.0],
+                                      [4.0, 5.0, 6.0]])),
+            3: pd.DataFrame(np.array([[1.0, 2.0],
+                                      [4.0, 5.0],
+                                      [7.0, 8.0]])),
+            4: pd.DataFrame(np.array([[1.0],
+                                      [4.0],
+                                      [7.0]])),
+            5: pd.DataFrame(np.array([[1.0, 2.0, 3.0]])),
+            6: pd.DataFrame(np.array([[1.0, np.nan, 3.0],
+                                      [np.nan, np.nan, 6.0],
+                                      [7.0, 8.0, 9.0]])),
+            7: pd.DataFrame(np.array([['1', 2.0]], dtype=object)),
+            8: np.nan,
+            9: np.nan,
+            10: np.nan}
 
-        for df_file, exp_df in exp_dfs.items():
-            num = df_file.split('_')[2].split('.')[0]
-            df = pd.read_pickle('tests/Test_dataframes/{}'.format(df_file))
+        for num in exp_input_dict.keys():
+            input_df = exp_input_dict[num]
+            exp_df = exp_results_dict[num]
 
-            if num in ['1', '2', '3', '4', '5', '6', '7']:
-                obs_df = trim_dataframe(df, df_file)
-                pd.testing.assert_frame_equal(exp_df, obs_df)
-            elif num in ['8', '9', '10']:
-                with self.assertRaises(PlateLayoutError): trim_dataframe(df, df_file)
+            if num in range(1, 8):
+                act_df = trim_dataframe(input_df, '')
+                pd.testing.assert_frame_equal(exp_df, act_df)
+            elif num in range(8, 11):
+                with self.assertRaises(PlateLayoutError): trim_dataframe(input_df, '')
 
     def test_parse_xlsx_to_dataframe(self):
         """
@@ -64,13 +95,208 @@ class TestClass(unittest.TestCase):
 
         print('Testing parse_xlsx_to_dataframe')
 
-        """
-        exp_dfs = {}
+        exp_input_dict = {
+            # Test plate parsing
+            1: ['tests/Test_plates/Test_plate_1.xlsx', 'Split 1',
+                {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                 'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Test non-numeric value for gain
+            2: ['tests/Test_plates/Test_plate_2.xlsx', 'Split 1',
+                {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                 'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 'X'],
+            # Test non-integer value for gain
+            3: ['tests/Test_plates/Test_plate_3.xlsx', 'Split 1',
+                {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                 'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 4.2],
+            # Test value less than or equal to 0 for gain
+            4: ['tests/Test_plates/Test_plate_4.xlsx', 'Split 1',
+                {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                 'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 0],
+            # Test plate path that doesn't exist
+            5: ['tests/Test_plates/Test_plate_5.xlsx', 'Split 1',
+                {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                 'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Test no "Protocol Information" sheet
+            6: ['tests/Test_plates/Test_plate_6.xlsx', 'Split 1',
+                {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                 'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Test no "platelayout" on "Protocol Information" sheet
+            7: ['tests/Test_plates/Test_plate_7.xlsx', 'Split 1',
+                {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                 'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Test no "peptidelayout" on "Protocol Information" sheet
+            8: ['tests/Test_plates/Test_plate_8.xlsx', 'Split 1',
+                {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                 'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Test no "End point" sheet
+            9: ['tests/Test_plates/Test_plate_9.xlsx', 'Split 1',
+                {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                 'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Test no "{}.rawdata" marking the start of the plate data on "End
+            # point" sheet
+            10: ['tests/Test_plates/Test_plate_10.xlsx', 'Split 1',
+                 {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                  'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Test peptides supplied by the user don't match those on the plate
+            11: ['tests/Test_plates/Test_plate_11.xlsx', 'Split 1',
+                 {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 5'],
+                  'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Test peptides supplied by the user don't match those on the plate
+            12: ['tests/Test_plates/Test_plate_12.xlsx', 'Split 1',
+                 {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1'],
+                  'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Test peptides supplied by the user don't contain repeated values
+            13: ['tests/Test_plates/Test_plate_13.xlsx', 'Split 1',
+                 {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3', 'Peptide 3'],
+                  'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Test peptides aren't listed more than once in platelayout
+            14: ['tests/Test_plates/Test_plate_14.xlsx', 'Split 1',
+                 {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                  'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Test non-standard shape of peptide layout
+            15: ['tests/Test_plates/Test_plate_15.xlsx', 'Split 1',
+                 {'Split 1': ['Peptide 2', 'Peptide 1', 'Peptide 3'],
+                  'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Test non-standard plate layout
+            16: ['tests/Test_plates/Test_plate_16.xlsx', 'Split 1',
+                 {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                  'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1],
+            # Tests detection of NaN values
+            17: ['tests/Test_plates/Test_plate_17.xlsx', 'Split 1',
+                 {'Split 1': ['Peptide 4', 'Peptide 2', 'Peptide 1', 'Peptide 3'],
+                  'Split 2': ['Peptide 1', 'Peptide 4', 'Peptide 2', 'Peptide 5']}, 1]
+        }
 
-        for excel_file, exp_df in exp_dfs.items():
-            num = excel_file.split('_')[2].split('.')[0]
-            with self.assertRaises(TypeError): parse_xlsx_to_dataframe(excel_file, split, peptide_dict, gain='a')
-        """
+        exp_results_dict = {
+            1: [pd.DataFrame({'A': [0.469, 9.85, 1.12, 8.21, 1, 0.379],
+                              'B': [1.72, 7.66, 5.68, 9.81, 9.19, 4.5],
+                              'C': [9.81, 9.3, 3.42, 1.04, 7.46, 3.6],
+                              'D': [5.42, 3.89, 3.44, 0.448, 4.97, 6.94],
+                              'E': [8.1, 8.28, 4.37, 5.03, 3.4, 0.517],
+                              'F': [2.75, 4.32, 9.75, 2.44, 8.33, 9.22]}),
+                OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_1.xlsx' for n in range(6)],
+                                                        'Analyte': ['Analyte 1' for n in range(6)],
+                                                        'Split 1_Peptide 4': [7.66, 3.89, 2.44, 4.5, 6.94, 9.22],
+                                                        'Split 1_Peptide 2': [9.85, 9.3, 5.03, 0.379, 3.6, 0.517],
+                                                        'Split 1_Peptide 1': [0.469, 9.81, 4.37, 1.0, 7.46, 3.4],
+                                                        'Split 1_Peptide 3': [1.72, 5.42, 9.75, 9.19, 4.97, 8.33]}, dtype=object),
+                             'Analyte X': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_1.xlsx'],
+                                                        'Analyte': ['Analyte X'],
+                                                        'Split 1_Peptide 4': [4.32],
+                                                        'Split 1_Peptide 2': [8.28],
+                                                        'Split 1_Peptide 1': [8.1],
+                                                        'Split 1_Peptide 3': [2.75]}, dtype=object),
+                             'Analyte 2': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_1.xlsx' for n in range(2)],
+                                                        'Analyte': ['Analyte 2' for n in range(2)],
+                                                        'Split 1_Peptide 4': [9.81, 0.448],
+                                                        'Split 1_Peptide 2': [8.21, 1.04],
+                                                        'Split 1_Peptide 1': [1.12, 3.42],
+                                                        'Split 1_Peptide 3': [5.68, 3.44]}, dtype=object)}),
+                ['Split 1_Peptide 4', 'Split 1_Peptide 2', 'Split 1_Peptide 1',
+                 'Split 1_Peptide 3']],
+            2: [np.nan, np.nan, np.nan],
+            3: [np.nan, np.nan, np.nan],
+            4: [np.nan, np.nan, np.nan],
+            5: [np.nan, np.nan, np.nan],
+            6: [np.nan, np.nan, np.nan],
+            7: [np.nan, np.nan, np.nan],
+            8: [np.nan, np.nan, np.nan],
+            9: [np.nan, np.nan, np.nan],
+            10: [np.nan, np.nan, np.nan],
+            11: [np.nan, np.nan, np.nan],
+            12: [np.nan, np.nan, np.nan],
+            13: [np.nan, np.nan, np.nan],
+            14: [np.nan, np.nan, np.nan],
+            15: [pd.DataFrame({'A': [0.469, 9.85, 1.12, 8.21, 1, 0.379],
+                               'B': [1.72, np.nan, 5.68, 9.81, 9.19, 4.5],
+                               'C': [9.81, 9.3, 3.42, 1.04, 7.46, 3.6],
+                               'D': [5.42, 3.89, 3.44, 0.448, 4.97, 6.94],
+                               'E': [8.1, 8.28, 4.37, 5.03, 3.4, 0.517],
+                               'F': [2.75, 4.32, 9.75, 2.44, 8.33, 9.22]}),
+                    OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_15.xlsx' for n in range(6)],
+                                                            'Analyte': ['Analyte 1' for n in range(6)],
+                                                            'Split 1_Peptide 2': [9.85, 9.3, 5.03, 0.379, 3.6, 0.517],
+                                                            'Split 1_Peptide 1': [0.469, 9.81, 4.37, 1.0, 7.46, 3.4],
+                                                            'Split 1_Peptide 3': [1.72, 5.42, 9.75, 9.19, 4.97, 8.33]}, dtype=object),
+                                 'Analyte X': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_15.xlsx'],
+                                                            'Analyte': ['Analyte X'],
+                                                            'Split 1_Peptide 2': [8.28],
+                                                            'Split 1_Peptide 1': [8.1],
+                                                            'Split 1_Peptide 3': [2.75]}, dtype=object),
+                                 'Analyte 2': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_15.xlsx' for n in range(2)],
+                                                            'Analyte': ['Analyte 2' for n in range(2)],
+                                                            'Split 1_Peptide 2': [8.21, 1.04],
+                                                            'Split 1_Peptide 1': [1.12, 3.42],
+                                                            'Split 1_Peptide 3': [5.68, 3.44]}, dtype=object)}),
+                    ['Split 1_Peptide 2', 'Split 1_Peptide 1', 'Split 1_Peptide 3']],
+            16: [pd.DataFrame({'A': [0.469, 9.85, 1.12, 8.21, 1, 0.379],
+                               'B': [1.72, 7.66, 5.68, 9.81, 9.19, 4.5],
+                               'C': [9.81, 9.3, 3.42, 1.04, 7.46, 3.6],
+                               'D': [5.42, 3.89, 3.44, 0.448, 4.97, 6.94],
+                               'E': [8.1, 8.28, 4.37, 5.03, 3.4, 0.517],
+                               'F': [2.75, 4.32, 9.75, 2.44, 8.33, 9.22]}),
+                 OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_16.xlsx' for n in range(4)],
+                                                         'Analyte': ['Analyte 1' for n in range(4)],
+                                                         'Split 1_Peptide 4': [3.89, 2.44, 4.5, 9.22],
+                                                         'Split 1_Peptide 2': [9.3, 5.03, 0.379, 0.517],
+                                                         'Split 1_Peptide 1': [9.81, 4.37, 1.0, 3.4],
+                                                         'Split 1_Peptide 3': [5.42, 9.75, 9.19, 8.33]}, dtype=object),
+                              'Analyte X': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_16.xlsx'],
+                                                         'Analyte': ['Analyte X'],
+                                                         'Split 1_Peptide 4': [4.32],
+                                                         'Split 1_Peptide 2': [8.28],
+                                                         'Split 1_Peptide 1': [8.1],
+                                                         'Split 1_Peptide 3': [2.75]}, dtype=object),
+                              'Analyte 2': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_16.xlsx' for n in range(2)],
+                                                         'Analyte': ['Analyte 2' for n in range(2)],
+                                                         'Split 1_Peptide 4': [9.81, 0.448],
+                                                         'Split 1_Peptide 2': [8.21, 1.04],
+                                                         'Split 1_Peptide 1': [1.12, 3.42],
+                                                         'Split 1_Peptide 3': [5.68, 3.44]}, dtype=object)}),
+                 ['Split 1_Peptide 4', 'Split 1_Peptide 2', 'Split 1_Peptide 1',
+                  'Split 1_Peptide 3']],
+            17: [np.nan, np.nan, np.nan]
+        }
+
+        for num in exp_input_dict.keys():
+            plate_path = exp_input_dict[num][0]
+            split_name = exp_input_dict[num][1]
+            peptide_dict = exp_input_dict[num][2]
+            gain = exp_input_dict[num][3]
+            exp_raw_data = exp_results_dict[num][0]
+            exp_grouped_data = exp_results_dict[num][1]
+            exp_peptide_list = exp_results_dict[num][2]
+
+            if num in [2, 3]:
+                with self.assertRaises(TypeError): parse_xlsx_to_dataframe(
+                    plate_path, split_name, peptide_dict, gain
+                )
+            elif num in [5]:
+                with self.assertRaises(FileNotFoundError): parse_xlsx_to_dataframe(
+                    plate_path, split_name, peptide_dict, gain
+                )
+            elif num in [4, 6, 7, 8, 9, 10, 17]:
+                with self.assertRaises(ValueError): parse_xlsx_to_dataframe(
+                    plate_path, split_name, peptide_dict, gain
+                )
+            elif num in [11, 12, 13, 14]:
+                with self.assertRaises(PlateLayoutError): parse_xlsx_to_dataframe(
+                    plate_path, split_name, peptide_dict, gain=1
+                )
+            else:
+                (
+                    act_raw_data, act_grouped_data, act_peptide_list
+                ) = parse_xlsx_to_dataframe(
+                    plate_path, split_name, peptide_dict, gain
+                )
+
+                pd.testing.assert_frame_equal(exp_raw_data, act_raw_data)
+                self.assertEqual(list(exp_grouped_data.keys()), list(act_grouped_data.keys()))
+                for key in exp_grouped_data.keys():
+                    exp_df = exp_grouped_data[key]
+                    act_df = act_grouped_data[key]
+                    pd.testing.assert_frame_equal(exp_df, act_df)
+                self.assertEqual(exp_peptide_list, act_peptide_list)
 
     def test_draw_scatter_plot(self):
         """
@@ -1129,6 +1355,11 @@ class TestClass(unittest.TestCase):
     def test_plate_parsing(self):
         """
         Tests complete plate parsing pipeline in parse_array_data
+        """
+
+        """
+        Test works even if array is non-rectangular, and the order of peptides
+        is different on different plates
         """
 
         print('Testing plate parsing pipeline')
