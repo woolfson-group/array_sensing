@@ -16,6 +16,7 @@ from collections import OrderedDict
 from scipy import stats
 from scipy.stats import f_oneway
 from sklearn.preprocessing import RobustScaler
+from xlrd import XLRDError
 
 if __name__ == 'subroutines.parse_array_data':
     from subroutines.exceptions import (
@@ -132,7 +133,7 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
             plate_path, sheet_name='Protocol Information', header=None, index_col=0,
             dtype=str
         )
-    except ValueError:
+    except (ValueError, XLRDError):
         raise ValueError(
             '"Protocol Information" sheet not found in {}'.format(plate_path)
         )
@@ -239,7 +240,7 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
             plate_path, sheet_name='End point', header=None, index_col=1,
             dtype=str
         )
-    except ValueError:
+    except (ValueError, XLRDError):
         raise ValueError(
             '"End point" sheet not found in {}'.format(plate_path)
         )
