@@ -213,13 +213,16 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
     if len(set(plate_peptides)) != (r_dim * c_dim):
         multi_peptides = []
         for peptide in copy.deepcopy(plate_peptides):
+            if type(peptide) == float:
+                if np.isnan(peptide):
+                    continue
             if plate_peptides.count(peptide) > 1 and not peptide in multi_peptides:
                 multi_peptides.append(peptide)
-        raise PlateLayoutError(
-            'Peptide(s)\n{}\nlisted more than once in plate layout from {}'.format(
-                multi_peptides, plate_path
+        if multi_peptides != []:
+            raise PlateLayoutError(
+                'Peptide(s)\n{}\nlisted more than once in plate layout from '
+                '{}'.format(multi_peptides, plate_path)
             )
-        )
     # This check shouldn't be needed, since if have already checked that the
     # peptide list provided by the user matches that parsed in from the xlsx
     # file, and that there are no repeated peptides in the list parsed in from
@@ -654,7 +657,8 @@ def scale_min_max(
     analytes tested on the plate and the values are the corresponding DataFrames
     of fluorescence readings
     - plate_name: Plate ID
-    - no_pep: Name given to sample without peptide in input peptide array
+    - no_pep: Dictionary of name given to sample without peptide in input
+    peptide array (value) for each split (key)
     - split_name: Name of split, which has been added as a prefix to all of the
     peptide names in the plate columns
     - cols_ignore: List of names of peptides to exclude from the analysis
@@ -715,18 +719,18 @@ def scale_min_max(
     )
     blank_data = calc_median(blank_data, raise_warning=True)
 
-    no_pep = '{}_{}'.format(split_name, no_pep)
+    no_pep_str = '{}_{}'.format(split_name, no_pep[split_name])
     scaled_plate = OrderedDict()
     analytes = [analyte for analyte in list(plate.keys()) if analyte != 'blank']
     for analyte in analytes:
         fluor_data = copy.deepcopy(plate[analyte]).reset_index(drop=True)
 
         # Checks that no peptide blank is available for each analyte
-        if not no_pep in fluor_data.columns:
+        if not no_pep_str in fluor_data.columns:
             raise PlateLayoutError(
                 'No reading for {} for analyte {} on plate {}.\nNo peptide '
                 'blank is required for min max scaling'.format(
-                    no_pep, analyte, plate_name
+                    no_pep_str, analyte, plate_name
                 )
             )
 
@@ -756,9 +760,9 @@ def scale_min_max(
             user_k_max=k_max
         )
         median_fluor_data = calc_median(fluor_data, raise_warning=True)
-        min_fluor_analyte = median_fluor_data[no_pep][0]
+        min_fluor_analyte = median_fluor_data[no_pep_str][0]
         for peptide in list(median_fluor_data.columns):
-            if peptide != no_pep and not peptide in cols_ignore:
+            if peptide != no_pep_str and not peptide in cols_ignore:
                 fluor_analyte_pep = median_fluor_data[peptide][0]
                 if fluor_analyte_pep > min_fluor_analyte:
                     continue
@@ -779,16 +783,16 @@ def scale_min_max(
         # Performs min max scaling for each feature
         for index_c, peptide in enumerate(list(fluor_data.columns)):
             if (
-                    not peptide in ['Plate', 'Analyte', no_pep]
+                    not peptide in ['Plate', 'Analyte', no_pep_str]
                 and not peptide in cols_ignore
             ):
                 # Applies min max scaling to each reading
                 max_fluor = blank_data[peptide][0]
-                min_fluor_demoninator = blank_data[no_pep][0]
+                min_fluor_demoninator = blank_data[no_pep_str][0]
                 if scale_method == 'fluorophore':
-                    min_fluor_numerator = blank_data[no_pep][0]
+                    min_fluor_numerator = blank_data[no_pep_str][0]
                 elif scale_method == 'analyte_fluorophore':
-                    min_fluor_numerator = median_fluor_data[no_pep][0]
+                    min_fluor_numerator = median_fluor_data[no_pep_str][0]
 
                 for index_r, reading in enumerate(fluor_data[peptide].tolist()):
                     if (max_fluor-min_fluor_demoninator) > 0:
@@ -798,14 +802,14 @@ def scale_min_max(
                         scaled_val = np.nan
                         if max_fluor == min_fluor_demoninator:
                             raise MinMaxFluorescenceError(
-                                '\x1b[31m WARNING - min and max fluorescence '
+                                '\x1b[31m Min and max fluorescence '
                                 'readings for peptide {} on plate {} are the '
                                 'same \033[0m'.format(
                                 peptide, fluor_data['Plate'][index_r])
                             )
                         elif max_fluor < min_fluor_demoninator:
                             raise MinMaxFluorescenceError(
-                                '\x1b[31m WARNING - median max. fluorescence'
+                                '\x1b[31m Median max. fluorescence'
                                 ' reading for peptide {} on plate {} is '
                                 'smaller than the corresponding median min. '
                                 'fluorescence reading \033[0m'.format(
@@ -813,7 +817,7 @@ def scale_min_max(
                             )
                     fluor_data.iloc[index_r, index_c] = scaled_val
 
-        drop_columns = [no_pep] + cols_ignore
+        drop_columns = [no_pep_str] + cols_ignore
         for col in drop_columns:
             try:
                 fluor_data = fluor_data.drop([col], axis=1)
@@ -821,10 +825,12 @@ def scale_min_max(
                 continue  # As barrels can be split across different plates,
                 # user-specified peptides to ignore across all splits may not be
                 # found in an individual split
+        peptide_list = [col for col in fluor_data.columns
+                        if not col in ['Plate', 'Analyte']]
 
         scaled_plate[analyte] = fluor_data
 
-    return scaled_plate, plate_outliers
+    return scaled_plate, plate_outliers, peptide_list
 
 
 def draw_heatmap_fingerprints(
@@ -1161,7 +1167,7 @@ class ParseArrayData(DefData):
     def __init__(
         self, data_dirs_dict, results_dir, repeat_labels_list, peptide_dict,
         control_peptides, control_analytes, gain=1, min_fluor=0,
-        max_fluor=260000
+        max_fluor=260000, test=False
     ):
         """
         - data_dirs_dict: Dictionary of split names and paths (either absolute
@@ -1191,6 +1197,8 @@ class ParseArrayData(DefData):
         plate reader, default is 0
         - max_fluor: Maximum fluorescence reading that can be measured by the
         plate reader, default is 260,000
+        - test: Boolean describing whether the class is being run during the
+        program's unit tests - by default is set to False
         """
 
         DefData.__init__(self, results_dir)
@@ -1250,6 +1258,9 @@ class ParseArrayData(DefData):
                 'Expected dictionary of list of control peptide names grouped '
                 'by split label, instead got {}'.format(type(self.control_peptides))
             )
+        for split in self.peptide_dict.keys():
+            if not split in self.control_peptides:
+                self.control_peptides[split] = []
         for fluorophore, peptide_list in self.control_peptides.items():
             peptide_list = ['{}_{}'.format(fluorophore, peptide)
                             for peptide in peptide_list]
@@ -1305,6 +1316,10 @@ class ParseArrayData(DefData):
                 '{} (min) and {} (max)'.format(self.min_fluor, self.max_fluor)
             )
 
+        # Defines whether the class is being called during the progran's unit
+        # tests
+        self.test = test
+
     def group_xlsx_repeats(self, ignore_files=None):
         """
         Groups xlsx files in the directories in self.data_dirs_dict into
@@ -1313,30 +1328,35 @@ class ParseArrayData(DefData):
 
         Input
         --------
-        - ignore_files: List of files not to be included in the analysis
+        - ignore_files: Dictionary of list of files (value) in each split (key)
+        not to be included in the analysis
         """
 
         if ignore_files is None:
-            ignore_files = []
+            ignore_files = OrderedDict()
 
         xlsx_file_dict = OrderedDict()
 
         # Checks that all files slated for removal a) actually exist and b) are
         # xlsx files
-        for data_dir in self.data_dirs_dict.values():
+        for split, data_dir in self.data_dirs_dict.items():
             all_files = sorted(os.listdir(data_dir))
-            for xlsx in ignore_files:
-                if not xlsx in all_files:
-                    raise FileNotFoundError(
-                        '{} not found in\n{}\n- make sure that all files '
-                        'specified to be exluded from the analysis '
-                        'exist'.format(xlsx, all_files)
-                    )
-                if not xlsx.endswith('.xlsx'):
-                    raise Exception(
-                        'File {} specified to be excluded from the analysis is '
-                        'not an xlsx file'.format(xlsx)
-                    )
+            if split in ignore_files.keys():
+                for xlsx in ignore_files[split]:
+                    xlsx = xlsx.split('/')[-1].split('\\')[-1]
+                    if not xlsx in all_files:
+                        raise FileNotFoundError(
+                            '{} not found in\n{}\n- make sure that all files '
+                            'specified to be exluded from the analysis '
+                            'exist'.format(xlsx, all_files)
+                        )
+                    if not xlsx.endswith('.xlsx'):
+                        raise Exception(
+                            'File {} specified to be excluded from the analysis'
+                            ' is not an xlsx file'.format(xlsx)
+                        )
+            else:
+                ignore_files[split] = []
 
         for repeat in self.repeat_list:
             xlsx_file_dict[repeat] = OrderedDict()
@@ -1349,10 +1369,10 @@ class ParseArrayData(DefData):
                     if file_name.endswith('{}.xlsx'.format(repeat)):
                         if (
                                 not file_name.startswith('~$')
-                            and not file_name in ignore_files
+                            and not file_name in ignore_files[split]
                         ):
                             xlsx_file_dict[repeat][split].append(file_name)
-                        elif file_name in ignore_files:
+                        elif file_name in ignore_files[split]:
                             print('Successfully removed {}'.format(file_name))
 
         self.repeat_dict = xlsx_file_dict
@@ -1366,7 +1386,8 @@ class ParseArrayData(DefData):
 
         Input
         --------
-        - no_pep: Name of sample without peptide in peptide array
+        - no_pep: Dictionary of name of sample without peptide in peptide array
+        (value) for each split (key)
         - scale_method: Method to use for min-max scaling of the data, set to
         either 'fluorophore' or 'analyte_fluorophore'
         - draw_plot: Boolean, determines whether or not to draw a scatter plot
@@ -1441,7 +1462,8 @@ class ParseArrayData(DefData):
                             self.results_dir, plot_dir_name
                         )
                         draw_scatter_plot(
-                            plate, plot_dir, peptide_list, plot_analytes, xlsx
+                            plate, plot_dir, peptide_list, plot_analytes, xlsx,
+                            self.test
                         )
 
                     # Checks for saturated readings
@@ -1486,7 +1508,8 @@ class ParseArrayData(DefData):
                                    for peptide in self.control_peptides[split]]
                     outliers[repeat][split][plate_path] = []
                     (
-                        scaled_plate, outliers[repeat][split][plate_path]
+                        scaled_plate, outliers[repeat][split][plate_path],
+                        peptide_list
                     ) = scale_min_max(
                         scale_method, plate, plate_path, no_pep, split,
                         cols_ignore, outliers[repeat][split][plate_path],
@@ -1505,7 +1528,7 @@ class ParseArrayData(DefData):
                         )
                         draw_scatter_plot(
                             scaled_plate, plot_dir, peptide_list, plot_analytes,
-                            xlsx
+                            xlsx, self.test
                         )
 
         # Checks that there is data for the same set of analytes in each repeat
@@ -1566,8 +1589,8 @@ class ParseArrayData(DefData):
                 print('\x1b[31m WARNING: Whilst removing analytes specified'
                       ' by the user to ignore, analyte {} is not '
                       'recognised'.format(analyte))
-        upd_analytes = [analyte for analyte in orig_analytes
-                        if not analyte in self.control_analytes]
+        upd_analytes = sorted([analyte for analyte in orig_analytes
+                               if not analyte in self.control_analytes])
 
         # Removes analytes the user has specified to ignore in the analysis
         for repeat in scaled_data.keys():
@@ -1589,8 +1612,7 @@ class ParseArrayData(DefData):
             '{}_{}'.format(split, feature) for split, feature_list in
             self.control_peptides.items() for feature in feature_list
         ]
-        drop_features += ['{}_{}'.format(split, no_pep)
-                          for split in self.peptide_dict.keys()]
+        drop_features += ['{}_{}'.format(key, value) for key, value in no_pep.items()]
         self.all_features = [feature for feature in features if not
                              feature in drop_features]
         split_features = OrderedDict()
@@ -1830,12 +1852,13 @@ class ParseArrayData(DefData):
 
         # Draws heatmap fingerprint
         draw_heatmap_fingerprints(
-            self.ml_fluor_data, self.results_dir, scale, class_order, prefix
+            self.ml_fluor_data, self.results_dir, scale, class_order, prefix,
+            self.test
         )
         # Draws boxplots
         draw_boxplots(
             self.ml_fluor_data, self.results_dir, scale, cushion, class_order,
-            prefix
+            prefix, self.test
         )
 
     def run_anova(self):
