@@ -7,3 +7,4 @@ Standard_array_data/*
 Large_array_data/AAs/*.xlsx
 Large_array_data/FAs/*.xlsx
 Large_array_data/Sugars/*.xlsx
+tests/Test_plates/*

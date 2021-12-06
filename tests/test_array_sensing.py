@@ -1365,193 +1365,277 @@ class TestClass(unittest.TestCase):
         Tests complete plate parsing pipeline in parse_array_data
         """
 
-        """
-        Test for one split and two splits
-        Test works even if array is non-rectangular, and the order of peptides
-        is different on different plates
-        """
-
-        """
-        Now need to create the 8 plates, and calculate the expected scaled
-        dataframe, for one split and two splits. DataFrame for one split should
-        be identical to the section of the dataframe for the same peptides in
-        two splits if the scaling has been done correctly, as the data for the
-        different peptides should not have been merged with or scaled against
-        each other
-        """
-
         print('Testing plate parsing pipeline')
 
-        # Input values
-        data_dirs_dict = {'Split 1': 'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/',
-                          'Split 2': 'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/'}
-        results_dir = 'tests/Test_plates/Test_plate_parsing_pipeline/Temp_output/'
-        repeat_labels_list = ['_001', '_002']
-        peptide_dict = {'Split 1': ['Peptide 2', 'Peptide X', 'Peptide 4'],
-                        'Split 2': ['Peptide 1', 'Peptide 2']}
-        control_peptides = {'Split 1': ['Peptide X']}
-        control_analytes = ['Analyte 2']
-        gain = 1
-        min_fluor = 0
-        max_fluor = 15
+        for n in range(2):
+            if n == 0:
+                # Expected values
+                exp_peptide_list = [
+                    'Split 1_Peptide 2', 'Split 1_Peptide X', 'Split 1_Peptide 4',
+                    'Split 2_Peptide 1', 'Split 2_Peptide 2'
+                ]
+                exp_repeat_dict = OrderedDict({
+                    '_001': OrderedDict({'Split 1': ['Test_plate_A_001.xlsx',
+                                                     'Test_plate_B_001.xlsx'],
+                                         'Split 2': ['Test_plate_X_001.xlsx',
+                                                     'Test_plate_Y_001.xlsx']}),
+                    '_002': OrderedDict({'Split 1': ['Test_plate_B_002.xlsx'],
+                                         'Split 2': ['Test_plate_K_002.xlsx',
+                                                     'Test_plate_L_002.xlsx']})})
+                exp_plates = OrderedDict({
+                    'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_A_001.xlsx': pd.DataFrame({
+                        'A': [0.469, 9.85, 1.12, 8.21, 1, 0.379],
+                        'B': [13.9, 7.66, 12.2, 9.81, 9.49, 4.5],
+                        'C': [9.81, 9.3, 3.42, 1.04, 7.46, 3.6],
+                        'D': [9.42, 3.89, 7.45, 0.448, 14, 6.94],
+                        'E': [8.1, 8.28, 4.37, 5.03, 3.4, 9.22],
+                        'F': [10.6, 4.32, 14.3, 2.44, 8.17, 0.517]
+                    }),
+                    'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_001.xlsx': pd.DataFrame({
+                        'A': [9.63, 2.23, 3.46, 6.76, 8.15, 14.91],
+                        'B': [9.63, 3.71, 8.56, 7.06, 7.9, 8.36],
+                        'C': [np.nan, 4.44, 6.31, 6.31, 2.35, 1.15],
+                        'D': [12.2, 8.86, 6.84, 6.57, 13.8, 7.81],
+                        'E': [8.49, 6.99, 9.5, 1.14, 0.304, 8.02],
+                        'F': [8.19, 8.29, 8.26, 6.84, 9.32, 9.77]
+                    }),
+                    'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_X_001.xlsx': pd.DataFrame({
+                        'A': [2.05, 6.12, 0.0316, 7.74, 5.24, 4.51],
+                        'B': [14.9, 7.85, 11.7, 4.06, 12.8, 8.85],
+                        'C': [0.291, 1.21, 4.22, 2.18, 0.618, 4.05],
+                        'D': [10.4, 3.78, 13, 1.78, 7.38, 9.88],
+                        'E': [1.23, 5.07, 5.1, 13, 4.62, 9.81],
+                        'F': [5.97, 2.06, 7.01, 3.83, 9.04, 6.06]
+                    }),
+                    'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_Y_001.xlsx': pd.DataFrame({
+                        'A': [1.66, 1.75, 0.654, 8.24, 7.24, 6.19],
+                        'B': [2.25, 5.35, 3.51, 11.4, 4.68, 12],
+                        'C': [0.778, 2.94, 8.06, 9.26, 3.43, 3.83],
+                        'D': [7.73, 11.4, 0.312, 12, 6.71, 14],
+                        'E': [7.05, 7.71, 4.9, 6.98, 1.09, 4.74],
+                        'F': [9.16, 11.7, 5.15, 5.49, 0.868, 13.3]
+                    }),
+                    'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_002.xlsx': pd.DataFrame({
+                        'A': [3.07, 0.0732, 5.8, 5.58, 4.54, 9.19],
+                        'B': [7.07, 7.93, 13.2, 0.568, 6.48, 7.46],
+                        'C': [6.45, 1.42, 6.24, 3.26, 6.02, 0.786],
+                        'D': [14.4, 0.465, 6.1, 5.09, 9, 2.19],
+                        'E': [5.79, 6.95, 6.65, 6.96, 2.64, 9.47],
+                        'F': [5.3, 3.29, 10.5, 3.03, 13.8, 7.01]
+                    }),
+                    'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_K_002.xlsx': pd.DataFrame({
+                        'A': [6.43, 5, 8.46, 7.44, 1.32, 6.25],
+                        'B': [9.66, 8.11, 9.5, 0.502, 8, 6.37],
+                        'C': [6.19, 3.88, 7.39, 9.92, 6.28, 5.56],
+                        'D': [9.48, 8.17, 2.92, 5.82, 3.62, 0.814],
+                        'E': [11.9, 9.48, 9.5, 5.42, 13.5, 1.88],
+                        'F': [4, 7.93, 5.94, 6.09, 8.39, 1.18]
+                    }),
+                    'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_L_002.xlsx': pd.DataFrame({
+                        'A': [2.21, 10.8, 2.31, 7.88, 1.45, 12.3],
+                        'B': [2.02, 8.61, 8.55, 12.8, 6.54, 14.5],
+                        'C': [6.14, 5.08, 1.51, 8, 11.2, 7.41]
+                    })
+                })
+                exp_scaled_data = OrderedDict({
+                    '_001': OrderedDict({'Split 1': OrderedDict({
+                        'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_A_001.xlsx': OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_A_001.xlsx' for n in range(5)], 'Analyte': ['Analyte 1' for n in range(5)], 'Split 1_Peptide 2': [0.614730553, 0.551533954, 0.060898541, -0.47351488, -0.103412616]}, dtype=object),
+                                                                                                                    'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_A_001.xlsx'], 'Analyte': ['Analyte 3'], 'Split 1_Peptide 2': [0.455015512]}, dtype=object)}),
+                        'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_001.xlsx': OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_001.xlsx' for n in range(5)], 'Analyte': ['Analyte 1' for n in range(5)], 'Split 1_Peptide 2': [-0.851908397, -0.514503817, -1.018320611, -1.016793893, 0.032061069]}, dtype=object),
+                                                                                                                    'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_001.xlsx'], 'Analyte': ['Analyte 3'], 'Split 1_Peptide 2': [-0.198473282]}, dtype=object)})
+                    }),
+                                         'Split 2': OrderedDict({
+                        'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_X_001.xlsx': OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_X_001.xlsx' for n in range(5)], 'Analyte': ['Analyte 1' for n in range(5)], 'Split 2_Peptide 2': [-0.714524207, -1.534223706, -0.983305509, -1.060100167, -0.098497496]}, dtype=object),
+                                                                                                                    'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_X_001.xlsx'], 'Analyte': ['Analyte 3'], 'Split 2_Peptide 2': [-0.150250417]}, dtype=object)}),
+                        'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_Y_001.xlsx': OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_Y_001.xlsx' for n in range(5)], 'Analyte': ['Analyte 1' for n in range(5)], 'Split 2_Peptide 2': [-0.619450317, -0.367864693, 0.319238901, -0.179704017, 0.012684989]}, dtype=object),
+                                                                                                                    'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_Y_001.xlsx' for n in range(2)], 'Analyte': ['Analyte 3' for n in range(2)], 'Split 2_Peptide 2': [0.117336152, -0.036997886]}, dtype=object)})
+                    })}),
+                    '_002': OrderedDict({'Split 1': OrderedDict({
+                        'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_002.xlsx': OrderedDict({'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_002.xlsx' for n in range(3)], 'Analyte': ['Analyte 3' for n in range(3)], 'Split 1_Peptide 2': [-14.40903226, 7.774193548, 15]}, dtype=object),
+                                                                                                                    'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_002.xlsx' for n in range(3)], 'Analyte': ['Analyte 1' for n in range(3)], 'Split 1_Peptide 2': [-14.83870968, -16.88387097, 11.12903226]}, dtype=object)})
+                    }),
+                                         'Split 2': OrderedDict({
+                        'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_K_002.xlsx': OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_K_002.xlsx' for n in range(4)], 'Analyte': ['Analyte 1' for n in range(4)], 'Split 2_Peptide 2': [0.055445545, -0.356435644, -1.401188119, -1.328712871]}, dtype=object),
+                                                                                                                    'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_K_002.xlsx' for n in range(2)], 'Analyte': ['Analyte 3' for n in range(2)], 'Split 2_Peptide 2': [-0.445544554, -1.916435644]}, dtype=object)}),
+                        'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_L_002.xlsx': OrderedDict({'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_L_002.xlsx' for n in range(3)], 'Analyte': ['Analyte 3' for n in range(3)], 'Split 2_Peptide 2': [-1.527704485, -0.490765172, -1.712401055]}, dtype=object),
+                                                                                                                    'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_L_002.xlsx'], 'Analyte': ['Analyte 1'], 'Split 2_Peptide 2': [-2.100263852]}, dtype=object)})
+                    })})
+                })
+                exp_all_features = ['Split 1_Peptide 2', 'Split 2_Peptide 2']
+                exp_split_features = OrderedDict({'Split 1': ['Split 1_Peptide 2'],
+                                                  'Split 2': ['Split 2_Peptide 2']})
+                exp_analytes = ['Analyte 1', 'Analyte 3']
+                exp_orig_fluor_data = pd.DataFrame({
+                    'Split 1_Peptide 2': [-0.288463748, 0.128271115, -14.83870968, 7.774193548],
+                    'Split 2_Peptide 2': [-0.493657505, -0.036997886, -1.328712871, -1.527704485],
+                    'Analyte': ['Analyte 1', 'Analyte 3', 'Analyte 1', 'Analyte 3']
+                })
+                exp_ml_fluor_data = pd.DataFrame({
+                    'Split 1_Peptide 2': [-0.288463748, -14.83870968, 0.128271115, 7.774193548],
+                    'Split 2_Peptide 2': [-0.493657505, -1.328712871, -0.036997886, -1.527704485],
+                    'Analyte': ['Analyte 1', 'Analyte 1', 'Analyte 3', 'Analyte 3']
+                })
+                exp_stats_dict = OrderedDict({'Split 1_Peptide 2': OrderedDict({'F statistic': 1.9630775054759544,
+                                                                                'p value': 0.29619485006889945}),
+                                              'Split 2_Peptide 2': OrderedDict({'F statistic': 0.022740970530456296,
+                                                                                'p value': 0.8939686326166734})})
 
-        # Expected values
-        exp_peptide_list = [
-            'Split 1_Peptide 2', 'Split 1_Peptide X', 'Split 1_Peptide 4',
-            'Split 2_Peptide 1', 'Split 2_Peptide 2'
-        ]
-        exp_repeat_dict = OrderedDict({
-            '_001': OrderedDict({'Split 1': ['Test_plate_A_001.xlsx',
-                                             'Test_plate_B_001.xlsx'],
-                                 'Split 2': ['Test_plate_X_001.xlsx',
-                                             'Test_plate_Y_001.xlsx']}),
-            '_002': OrderedDict({'Split 1': ['Test_plate_B_002.xlsx'],
-                                 'Split 2': ['Test_plate_K_002.xlsx',
-                                             'Test_plate_L_002.xlsx']})})
-        exp_plates = OrderedDict({
-            'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_A_001.xlsx': pd.DataFrame({
-                'A': [0.469, 9.85, 1.12, 8.21, 1, 0.379],
-                'B': [13.9, 7.66, 12.2, 9.81, 9.49, 4.5],
-                'C': [9.81, 9.3, 3.42, 1.04, 7.46, 3.6],
-                'D': [9.42, 3.89, 7.45, 0.448, 14, 6.94],
-                'E': [8.1, 8.28, 4.37, 5.03, 3.4, 9.22],
-                'F': [10.6, 4.32, 14.3, 2.44, 8.17, 0.517]
-            }),
-            'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_001.xlsx': pd.DataFrame({
-                'A': [9.63, 2.23, 3.46, 6.76, 8.15, 14.91],
-                'B': [9.63, 3.71, 8.56, 7.06, 7.9, 8.36],
-                'C': [np.nan, 4.44, 6.31, 6.31, 2.35, 1.15],
-                'D': [12.2, 8.86, 6.84, 6.57, 13.8, 7.81],
-                'E': [8.49, 6.99, 9.5, 1.14, 0.304, 8.02],
-                'F': [8.19, 8.29, 8.26, 6.84, 9.32, 9.77]
-            }),
-            'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_X_001.xlsx': pd.DataFrame({
-                'A': [2.05, 6.12, 0.0316, 7.74, 5.24, 4.51],
-                'B': [14.9, 7.85, 11.7, 4.06, 12.8, 8.85],
-                'C': [0.291, 1.21, 4.22, 2.18, 0.618, 4.05],
-                'D': [10.4, 3.78, 13, 1.78, 7.38, 9.88],
-                'E': [1.23, 5.07, 5.1, 13, 4.62, 9.81],
-                'F': [5.97, 2.06, 7.01, 3.83, 9.04, 6.06]
-            }),
-            'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_Y_001.xlsx': pd.DataFrame({
-                'A': [1.66, 1.75, 0.654, 8.24, 7.24, 6.19],
-                'B': [2.25, 5.35, 3.51, 11.4, 4.68, 12],
-                'C': [0.778, 2.94, 8.06, 9.26, 3.43, 3.83],
-                'D': [7.73, 11.4, 0.312, 12, 6.71, 14],
-                'E': [7.05, 7.71, 4.9, 6.98, 1.09, 4.74],
-                'F': [9.16, 11.7, 5.15, 5.49, 0.868, 13.3]
-            }),
-            'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_002.xlsx': pd.DataFrame({
-                'A': [3.07, 0.0732, 5.8, 5.58, 4.54, 9.19],
-                'B': [7.07, 7.93, 13.2, 0.568, 6.48, 7.46],
-                'C': [6.45, 1.42, 6.24, 3.26, 6.02, 0.786],
-                'D': [14.4, 0.465, 6.1, 5.09, 9, 2.19],
-                'E': [5.79, 6.95, 6.65, 6.96, 2.64, 9.47],
-                'F': [5.3, 3.29, 10.5, 3.03, 13.8, 7.01]
-            }),
-            'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_K_002.xlsx': pd.DataFrame({
-                'A': [6.43, 5, 8.46, 7.44, 1.32, 6.25],
-                'B': [9.66, 8.11, 9.5, 0.502, 8, 6.37],
-                'C': [6.19, 3.88, 7.39, 9.92, 6.28, 5.56],
-                'D': [9.48, 8.17, 2.92, 5.82, 3.62, 0.814],
-                'E': [11.9, 9.48, 9.5, 5.42, 13.5, 1.88],
-                'F': [4, 7.93, 5.94, 6.09, 8.39, 1.18]
-            }),
-            'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_L_002.xlsx': pd.DataFrame({
-                'A': [2.21, 10.8, 2.31, 7.88, 1.45, 12.3],
-                'B': [2.02, 8.61, 8.55, 12.8, 6.54, 14.5],
-                'C': [6.14, 5.08, 1.51, 8, 11.2, 7.41]
-            })
-        })
-        exp_scaled_data = OrderedDict({
-            '_001': OrderedDict({'Split 1': OrderedDict({
-                'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_A_001.xlsx': OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_A_001.xlsx' for n in range(5)], 'Analyte': ['Analyte 1' for n in range(5)], 'Split 1_Peptide 2': [0.614730553, 0.551533954, 0.060898541, -0.47351488, -0.103412616]}, dtype=object),
-                                                                                                            'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_A_001.xlsx'], 'Analyte': ['Analyte 3'], 'Split 1_Peptide 2': [0.455015512]}, dtype=object)}),
-                'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_001.xlsx': OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_001.xlsx' for n in range(5)], 'Analyte': ['Analyte 1' for n in range(5)], 'Split 1_Peptide 2': [-0.851908397, -0.514503817, -1.018320611, -1.016793893, 0.032061069]}, dtype=object),
-                                                                                                            'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_001.xlsx'], 'Analyte': ['Analyte 3'], 'Split 1_Peptide 2': [-0.198473282]}, dtype=object)})
-            }),
-                                 'Split 2': OrderedDict({
-                'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_X_001.xlsx': OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_X_001.xlsx' for n in range(5)], 'Analyte': ['Analyte 1' for n in range(5)], 'Split 2_Peptide 2': [-0.714524207, -1.534223706, -0.983305509, -1.060100167, -0.098497496]}, dtype=object),
-                                                                                                            'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_X_001.xlsx'], 'Analyte': ['Analyte 3'], 'Split 2_Peptide 2': [-0.150250417]}, dtype=object)}),
-                'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_Y_001.xlsx': OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_Y_001.xlsx' for n in range(5)], 'Analyte': ['Analyte 1' for n in range(5)], 'Split 2_Peptide 2': [-0.619450317, -0.367864693, 0.319238901, -0.179704017, 0.012684989]}, dtype=object),
-                                                                                                            'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_Y_001.xlsx' for n in range(2)], 'Analyte': ['Analyte 3' for n in range(2)], 'Split 2_Peptide 2': [0.117336152, -0.036997886]}, dtype=object)})
-                                 })}),
-            '_002': OrderedDict({'Split 1': OrderedDict({
-                'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_002.xlsx': OrderedDict({'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_002.xlsx' for n in range(3)], 'Analyte': ['Analyte 3' for n in range(3)], 'Split 1_Peptide 2': [-14.40903226, 7.774193548, 15]}, dtype=object),
-                                                                                                            'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_002.xlsx' for n in range(3)], 'Analyte': ['Analyte 1' for n in range(3)], 'Split 1_Peptide 2': [-14.83870968, -16.88387097, 11.12903226]}, dtype=object)})
-            }),
-                                 'Split 2': OrderedDict({
-                'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_K_002.xlsx': OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_K_002.xlsx' for n in range(4)], 'Analyte': ['Analyte 1' for n in range(4)], 'Split 2_Peptide 2': [0.055445545, -0.356435644, -1.401188119, -1.328712871]}, dtype=object),
-                                                                                                            'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_K_002.xlsx' for n in range(2)], 'Analyte': ['Analyte 3' for n in range(2)], 'Split 2_Peptide 2': [-0.445544554, -1.916435644]}, dtype=object)}),
-                'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_L_002.xlsx': OrderedDict({'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_L_002.xlsx' for n in range(3)], 'Analyte': ['Analyte 3' for n in range(3)], 'Split 2_Peptide 2': [-1.527704485, -0.490765172, -1.712401055]}, dtype=object),
-                                                                                                            'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_2/Test_plate_L_002.xlsx'], 'Analyte': ['Analyte 1'], 'Split 2_Peptide 2': [-2.100263852]}, dtype=object)})
-                                 })})
-        })
-        exp_all_features = ['Split 1_Peptide 2', 'Split 2_Peptide 2']
-        exp_split_features = OrderedDict({'Split 1': ['Split 1_Peptide 2'],
-                                          'Split 2': ['Split 2_Peptide 2']})
-        exp_analytes = ['Analyte 1', 'Analyte 3']
+                # Input values
+                data_dirs_dict = {'Split 1': 'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/',
+                                  'Split 2': 'tests/Test_plates/Test_plate_parsing_pipeline/Split_2/'}
+                results_dir = 'tests/Test_plates/Test_plate_parsing_pipeline/Temp_output/'
+                repeat_labels_list = ['_001', '_002']
+                peptide_dict = {'Split 1': ['Peptide 2', 'Peptide X', 'Peptide 4'],
+                                'Split 2': ['Peptide 1', 'Peptide 2']}
+                control_peptides = {'Split 1': ['Peptide X']}
+                control_analytes = ['Analyte 2']
+                gain = 1
+                min_fluor = 0
+                max_fluor = 15
 
-        # Run the pipeline
-        test_parsing = ParseArrayData(
-            data_dirs_dict, results_dir, repeat_labels_list, peptide_dict,
-            control_peptides, control_analytes, gain, min_fluor, max_fluor, True
-        )
-
-        test_parsing.group_xlsx_repeats(ignore_files={'Split 1': ['Test_plate_A_002.xlsx']})
-        test_parsing.xlsx_to_scaled_df(
-            no_pep={'Split 1': 'Peptide 4', 'Split 2': 'Peptide 1'},
-            scale_method='analyte_fluorophore', draw_plot=True, plot_dir_name=''
-        )
-        """
-        test_parsing.combine_plate_readings()
-        test_parsing.display_data_distribution()
-        test_stats_dict = test_parsing.run_anova()
-        """
-
-        # Run at the end to check that values aren't updated during the run
-        self.assertEqual(data_dirs_dict, test_parsing.data_dirs_dict)
-        self.assertEqual(results_dir.rstrip('/'), test_parsing.results_dir)
-        self.assertEqual(repeat_labels_list, test_parsing.repeat_list)
-        self.assertEqual(peptide_dict, test_parsing.peptide_dict)
-        self.assertEqual(exp_peptide_list, test_parsing.peptide_list)
-        self.assertEqual(control_peptides, test_parsing.control_peptides)
-        self.assertEqual(control_analytes, test_parsing.control_analytes)
-        self.assertEqual(gain, test_parsing.gain)
-        self.assertEqual(min_fluor, test_parsing.min_fluor)
-        self.assertEqual(max_fluor, test_parsing.max_fluor)
-        self.assertEqual(exp_repeat_dict, test_parsing.repeat_dict)
-        self.assertEqual(exp_plates.keys(), test_parsing.plates.keys())
-        for plate_path in test_parsing.plates.keys():
-            pd.testing.assert_frame_equal(
-                exp_plates[plate_path], test_parsing.plates[plate_path]
-            )
-        self.assertEqual(exp_scaled_data.keys(), test_parsing.scaled_data.keys())
-        for repeat in test_parsing.scaled_data.keys():
-            self.assertEqual(
-                exp_scaled_data[repeat].keys(), test_parsing.scaled_data[repeat].keys()
-            )
-            for split in test_parsing.scaled_data[repeat].keys():
-                self.assertEqual(
-                    exp_scaled_data[repeat][split].keys(),
-                    test_parsing.scaled_data[repeat][split].keys()
+                test_parsing = ParseArrayData(
+                    data_dirs_dict, results_dir, repeat_labels_list, peptide_dict,
+                    control_peptides, control_analytes, gain, min_fluor, max_fluor, True
                 )
-                for plate_path in test_parsing.scaled_data[repeat][split].keys():
-                    self.assertEqual(
-                        exp_scaled_data[repeat][split][plate_path].keys(),
-                        test_parsing.scaled_data[repeat][split][plate_path].keys()
-                    )
-                    for analyte in test_parsing.scaled_data[repeat][split][plate_path]:
-                        act_df = test_parsing.scaled_data[repeat][split][plate_path][analyte]
-                        exp_df = exp_scaled_data[repeat][split][plate_path][analyte]
-                        pd.testing.assert_frame_equal(exp_df, act_df)
-        self.assertEqual(exp_all_features, test_parsing.all_features)
-        self.assertEqual(exp_split_features, test_parsing.split_features)
-        self.assertEqual(exp_analytes, test_parsing.analytes)
-        """
-        self.assertEqual(test_parsing.orig_fluor_data)
-        self.assertEqual(test_parsing.ml_fluor_data)
-        self.assertEqual(test_stats_dict)
-        """
 
-        shutil.rmtree('tests/Test_plates/Test_plate_parsing_pipeline/Temp_output/')
+            elif n == 1:
+                # Expected values
+                exp_peptide_list = [
+                    'Split 1_Peptide 2', 'Split 1_Peptide X', 'Split 1_Peptide 4'
+                ]
+                exp_repeat_dict = OrderedDict({
+                    '_001': OrderedDict({'Split 1': ['Test_plate_A_001.xlsx',
+                                                     'Test_plate_B_001.xlsx']}),
+                    '_002': OrderedDict({'Split 1': ['Test_plate_B_002.xlsx']})
+                })
+                exp_plates = OrderedDict({
+                    'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_A_001.xlsx': pd.DataFrame({
+                        'A': [0.469, 9.85, 1.12, 8.21, 1, 0.379],
+                        'B': [13.9, 7.66, 12.2, 9.81, 9.49, 4.5],
+                        'C': [9.81, 9.3, 3.42, 1.04, 7.46, 3.6],
+                        'D': [9.42, 3.89, 7.45, 0.448, 14, 6.94],
+                        'E': [8.1, 8.28, 4.37, 5.03, 3.4, 9.22],
+                        'F': [10.6, 4.32, 14.3, 2.44, 8.17, 0.517]
+                    }),
+                    'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_001.xlsx': pd.DataFrame({
+                        'A': [9.63, 2.23, 3.46, 6.76, 8.15, 14.91],
+                        'B': [9.63, 3.71, 8.56, 7.06, 7.9, 8.36],
+                        'C': [np.nan, 4.44, 6.31, 6.31, 2.35, 1.15],
+                        'D': [12.2, 8.86, 6.84, 6.57, 13.8, 7.81],
+                        'E': [8.49, 6.99, 9.5, 1.14, 0.304, 8.02],
+                        'F': [8.19, 8.29, 8.26, 6.84, 9.32, 9.77]
+                    }),
+                    'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_002.xlsx': pd.DataFrame({
+                        'A': [3.07, 0.0732, 5.8, 5.58, 4.54, 9.19],
+                        'B': [7.07, 7.93, 13.2, 0.568, 6.48, 7.46],
+                        'C': [6.45, 1.42, 6.24, 3.26, 6.02, 0.786],
+                        'D': [14.4, 0.465, 6.1, 5.09, 9, 2.19],
+                        'E': [5.79, 6.95, 6.65, 6.96, 2.64, 9.47],
+                        'F': [5.3, 3.29, 10.5, 3.03, 13.8, 7.01]
+                    })
+                })
+                exp_scaled_data = OrderedDict({
+                    '_001': OrderedDict({'Split 1': OrderedDict({
+                        'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_A_001.xlsx': OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_A_001.xlsx' for n in range(5)], 'Analyte': ['Analyte 1' for n in range(5)], 'Split 1_Peptide 2': [0.614730553, 0.551533954, 0.060898541, -0.47351488, -0.103412616]}, dtype=object),
+                                                                                                                    'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_A_001.xlsx'], 'Analyte': ['Analyte 3'], 'Split 1_Peptide 2': [0.455015512]}, dtype=object)}),
+                        'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_001.xlsx': OrderedDict({'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_001.xlsx' for n in range(5)], 'Analyte': ['Analyte 1' for n in range(5)], 'Split 1_Peptide 2': [-0.851908397, -0.514503817, -1.018320611, -1.016793893, 0.032061069]}, dtype=object),
+                                                                                                                    'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_001.xlsx'], 'Analyte': ['Analyte 3'], 'Split 1_Peptide 2': [-0.198473282]}, dtype=object)})
+                    })}),
+                    '_002': OrderedDict({'Split 1': OrderedDict({
+                        'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_002.xlsx': OrderedDict({'Analyte 3': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_002.xlsx' for n in range(3)], 'Analyte': ['Analyte 3' for n in range(3)], 'Split 1_Peptide 2': [-14.40903226, 7.774193548, 15]}, dtype=object),
+                                                                                                                    'Analyte 1': pd.DataFrame({'Plate': ['tests/Test_plates/Test_plate_parsing_pipeline/Split_1/Test_plate_B_002.xlsx' for n in range(3)], 'Analyte': ['Analyte 1' for n in range(3)], 'Split 1_Peptide 2': [-14.83870968, -16.88387097, 11.12903226]}, dtype=object)})
+                    })})
+                })
+                exp_all_features = ['Split 1_Peptide 2']
+                exp_split_features = OrderedDict({'Split 1': ['Split 1_Peptide 2']})
+                exp_analytes = ['Analyte 1', 'Analyte 3']
+                exp_orig_fluor_data = pd.DataFrame({
+                    'Split 1_Peptide 2': [-0.288463748, 0.128271115, -14.83870968, 7.774193548],
+                    'Analyte': ['Analyte 1', 'Analyte 3', 'Analyte 1', 'Analyte 3']
+                })
+                exp_ml_fluor_data = pd.DataFrame({
+                    'Split 1_Peptide 2': [-0.288463748, -14.83870968, 0.128271115, 7.774193548],
+                    'Analyte': ['Analyte 1', 'Analyte 1', 'Analyte 3', 'Analyte 3']
+                })
+                exp_stats_dict = OrderedDict({'Split 1_Peptide 2': OrderedDict({'F statistic': 1.9630775054759544,
+                                                                                'p value': 0.29619485006889945})})
+
+                # Input values
+                data_dirs_dict = {'Split 1': 'tests/Test_plates/Test_plate_parsing_pipeline/Split_1/'}
+                results_dir = 'tests/Test_plates/Test_plate_parsing_pipeline/Temp_output/'
+                repeat_labels_list = ['_001', '_002']
+                peptide_dict = {'Split 1': ['Peptide 2', 'Peptide X', 'Peptide 4']}
+                control_peptides = {'Split 1': ['Peptide X']}
+                control_analytes = ['Analyte 2']
+                gain = 1
+                min_fluor = 0
+                max_fluor = 15
+
+                test_parsing = ParseArrayData(
+                    data_dirs_dict, results_dir, repeat_labels_list, peptide_dict,
+                    control_peptides, control_analytes, gain, min_fluor, max_fluor, True
+                )
+
+            # Run the pipeline
+            test_parsing.group_xlsx_repeats(ignore_files={'Split 1': ['Test_plate_A_002.xlsx']})
+            test_parsing.xlsx_to_scaled_df(
+                no_pep={'Split 1': 'Peptide 4', 'Split 2': 'Peptide 1'},
+                scale_method='analyte_fluorophore', draw_plot=True, plot_dir_name=''
+            )
+            test_parsing.combine_plate_readings(same_num_repeats=False)
+            test_parsing.display_data_distribution()
+            act_stats_dict = test_parsing.run_anova()
+
+            # Run at the end to check that values aren't updated during the run
+            self.assertEqual(data_dirs_dict, test_parsing.data_dirs_dict)
+            self.assertEqual(results_dir.rstrip('/'), test_parsing.results_dir)
+            self.assertEqual(repeat_labels_list, test_parsing.repeat_list)
+            self.assertEqual(peptide_dict, test_parsing.peptide_dict)
+            self.assertEqual(exp_peptide_list, test_parsing.peptide_list)
+            self.assertEqual(control_peptides, test_parsing.control_peptides)
+            self.assertEqual(control_analytes, test_parsing.control_analytes)
+            self.assertEqual(gain, test_parsing.gain)
+            self.assertEqual(min_fluor, test_parsing.min_fluor)
+            self.assertEqual(max_fluor, test_parsing.max_fluor)
+            self.assertEqual(exp_repeat_dict, test_parsing.repeat_dict)
+            self.assertEqual(list(exp_plates.keys()), list(test_parsing.plates.keys()))
+            for plate_path in test_parsing.plates.keys():
+                pd.testing.assert_frame_equal(
+                    exp_plates[plate_path], test_parsing.plates[plate_path]
+                )
+            self.assertEqual(list(exp_scaled_data.keys()), list(test_parsing.scaled_data.keys()))
+            for repeat in test_parsing.scaled_data.keys():
+                self.assertEqual(
+                    list(exp_scaled_data[repeat].keys()), list(test_parsing.scaled_data[repeat].keys())
+                )
+                for split in test_parsing.scaled_data[repeat].keys():
+                    self.assertEqual(
+                        list(exp_scaled_data[repeat][split].keys()),
+                        list(test_parsing.scaled_data[repeat][split].keys())
+                    )
+                    for plate_path in test_parsing.scaled_data[repeat][split].keys():
+                        self.assertEqual(
+                            list(exp_scaled_data[repeat][split][plate_path].keys()),
+                            list(test_parsing.scaled_data[repeat][split][plate_path].keys())
+                        )
+                        for analyte in test_parsing.scaled_data[repeat][split][plate_path]:
+                            act_df = test_parsing.scaled_data[repeat][split][plate_path][analyte]
+                            exp_df = exp_scaled_data[repeat][split][plate_path][analyte]
+                            pd.testing.assert_frame_equal(exp_df, act_df)
+            self.assertEqual(exp_all_features, test_parsing.all_features)
+            self.assertEqual(exp_split_features, test_parsing.split_features)
+            self.assertEqual(exp_analytes, test_parsing.analytes)
+            pd.testing.assert_frame_equal(exp_orig_fluor_data, test_parsing.orig_fluor_data)
+            pd.testing.assert_frame_equal(exp_ml_fluor_data, test_parsing.ml_fluor_data)
+            self.assertEqual(list(exp_stats_dict.keys()), list(act_stats_dict.keys()))
+            for peptide in exp_stats_dict.keys():
+                self.assertEqual(['F statistic', 'p value'], list(exp_stats_dict[peptide].keys()))
+                self.assertEqual(['F statistic', 'p value'], list(act_stats_dict[peptide].keys()))
+                exp_F = exp_stats_dict[peptide]['F statistic']
+                exp_p = exp_stats_dict[peptide]['p value']
+                act_F = act_stats_dict[peptide]['F statistic']
+                act_p = act_stats_dict[peptide]['p value']
+                np.testing.assert_almost_equal(exp_F, act_F, 7)
+                np.testing.assert_almost_equal(exp_p, act_p, 7)
+
+            shutil.rmtree('tests/Test_plates/Test_plate_parsing_pipeline/Temp_output/')

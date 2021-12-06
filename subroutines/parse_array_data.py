@@ -1645,7 +1645,8 @@ class ParseArrayData(DefData):
                             ))
 
     def combine_plate_readings(
-        self, outlier_excl_thresh=0.05, drop_thresh=2, k_max=np.nan
+        self, outlier_excl_thresh=0.05, drop_thresh=2, k_max=np.nan,
+        same_num_repeats=True
     ):
         """
         Calculates the median of repeat readings for each independent sample,
@@ -1662,6 +1663,8 @@ class ParseArrayData(DefData):
         - k_max: The maximum number of outliers to exclude with a generalised ESD
         test. If leave as default np.nan, an appropriate threshold will be selected
         based upon the size of the dataset.
+        - same_num_repeats: Boolean, describes if the same number of technical
+        replicate readings have been collected for all analytes in the same repeat
         """
 
         scaled_merged_dfs = OrderedDict()
@@ -1717,6 +1720,13 @@ class ParseArrayData(DefData):
                         )
                     analyte_df_list = copy.deepcopy(analyte_dfs_dict[analyte][split])
                     comb_df = pd.concat(analyte_df_list, axis=0).reset_index(drop=True)
+                    if comb_df.shape[1] != analyte_df_list[0].shape[1]:
+                        raise Exception(
+                            'Columns in dataframes for analyte: {}, split : {},'
+                            ' repeat: {} don\'t match - check that the peptides'
+                            ' on the different plates '
+                            'match'.format(analyte, split, repeat)
+                        )
                     comb_df_list.append(comb_df)
 
                 lens = []
@@ -1725,13 +1735,25 @@ class ParseArrayData(DefData):
                     lens.append(comb_df.shape[0])
                     all_cols += list(comb_df.columns)
                 if len(set(lens)) != 1:
-                    raise Exception(
-                        'Different number of replicates measured for {} in '
-                        'repeat {} across barrels in different splits:\n{} '
-                        'measurements found respectively for {}'.format(
-                            analyte, repeat, lens, self.peptide_dict
+                    if same_num_repeats is True:
+                        raise Exception(
+                            'Different number of replicates measured for {} in '
+                            'repeat {} across barrels in different splits:\n{} '
+                            'measurements found respectively for {}'.format(
+                                analyte, repeat, lens, self.peptide_dict.keys()
+                            )
                         )
-                    )
+                    else:
+                        max_len = max(lens)
+                        for comb_df in comb_df_list:
+                            if comb_df.shape[0] < max_len:
+                                diff = max_len - comb_df.shape[0]
+                                for n in range(diff):
+                                    comb_df = comb_df.append(pd.Series(
+                                        [np.nan for i in range(comb_df.shape[1])],
+                                        index=comb_df.columns, name='PlaceHolder'
+                                    ))
+                                comb_df = comb_df.reset_index(drop=True)
                 if len(set(all_cols)) != len(all_cols):
                     raise Exception(
                         'Repeated columns found across splits:\n'
