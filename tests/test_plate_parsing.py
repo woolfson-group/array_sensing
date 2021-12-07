@@ -1,5 +1,5 @@
 
-# python -m unittest tests/test_array_sensing.py
+# python -m unittest tests/test_plate_parsing.py
 
 import numpy as np
 import os
@@ -22,7 +22,7 @@ class TestClass(unittest.TestCase):
 
     def test_trim_dataframe(self):
         """
-        Tests trim_dataframe in parse_array_data
+        Tests trim_dataframe in parse_array_data.py
         """
 
         print('Testing trim_dataframe')
@@ -90,7 +90,7 @@ class TestClass(unittest.TestCase):
 
     def test_parse_xlsx_to_dataframe(self):
         """
-        Tests parse_xlsx_to_dataframe in parse_array_data
+        Tests parse_xlsx_to_dataframe in parse_array_data.py
         """
 
         print('Testing parse_xlsx_to_dataframe')
@@ -300,7 +300,7 @@ class TestClass(unittest.TestCase):
 
     def test_draw_scatter_plot(self):
         """
-        Tests draw_scatter_plot in parse_array_data
+        Tests draw_scatter_plot in parse_array_data.py
         """
 
         print('Testing draw_scatter_plot')
@@ -431,7 +431,7 @@ class TestClass(unittest.TestCase):
 
     def test_check_for_saturation(self):
         """
-        Tests check_for_saturation in parse_array_data
+        Tests check_for_saturation in parse_array_data.py
         """
 
         print('Testing check_for_saturation')
@@ -450,7 +450,7 @@ class TestClass(unittest.TestCase):
 
     def test_highlight_outliers(self):
         """
-        Tests highlight_outliers in parse_array_data
+        Tests highlight_outliers in parse_array_data.py
         """
 
         print('Testing highlight_outliers')
@@ -705,7 +705,7 @@ class TestClass(unittest.TestCase):
 
     def test_calc_median(self):
         """
-        Tests calc_median in parse_array_data
+        Tests calc_median in parse_array_data.py
         """
 
         print('Testing calc_median')
@@ -735,7 +735,7 @@ class TestClass(unittest.TestCase):
 
     def test_scale_min_max(self):
         """
-        Tests scale_min_max in parse_array_data
+        Tests scale_min_max in parse_array_data.py
         """
 
         print('Testing scale_min_max')
@@ -1027,7 +1027,7 @@ class TestClass(unittest.TestCase):
 
     def test_draw_boxplots(self):
         """
-        Tests draw_boxplots in parse_array_data
+        Tests draw_boxplots in parse_array_data.py
         """
 
         print('Testing draw_boxplots')
@@ -1198,7 +1198,7 @@ class TestClass(unittest.TestCase):
 
     def test_draw_heatmap_fingerprints(self):
         """
-        Tests draw_heatmap_fingerprints in parse_array_data
+        Tests draw_heatmap_fingerprints in parse_array_data.py
         """
 
         print('Testing draw_heatmap_fingerprints')
@@ -1362,7 +1362,7 @@ class TestClass(unittest.TestCase):
 
     def test_plate_parsing(self):
         """
-        Tests complete plate parsing pipeline in parse_array_data
+        Tests complete plate parsing pipeline in parse_array_data.py
         """
 
         print('Testing plate parsing pipeline')

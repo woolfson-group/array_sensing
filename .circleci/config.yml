@@ -6,4 +6,5 @@ jobs:
     steps:
       - checkout
       - run: pip install -r requirements.txt
-      - run: python -m unittest tests.test_array_sensing
+      - run: python -m unittest tests.test_plate_parsing
+      - run: python -m unittest tests.test_ml_training

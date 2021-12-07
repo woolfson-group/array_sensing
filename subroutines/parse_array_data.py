@@ -37,12 +37,12 @@ def trim_dataframe(label_df, plate_path):
     and columns
 
     Input
-    --------
+    ----------
     - label_df: DataFrame of analyte / peptide labels parsed from an xlsx file
     - plate_path: File path to input xlsx file
 
     Output
-    --------
+    ----------
     - label_df: Input DataFrame that has been trimmed to remove excess rows
     and/or columns appended to its bottom and/or right hand side
     """
@@ -96,7 +96,8 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
     Input
     ----------
     - plate_path: File path to input xlsx file
-    - split:
+    - split: Name of split, which has been added as a prefix to all of the
+    peptide names in the plate columns
     - peptide_dict: Dictionary of lists of all peptides to be included in the
     analysis for each split
     - gain: Which dataframe of fluorescence data (collected at different gains)
@@ -108,7 +109,7 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
     input xlsx file (i.e. with no further processing or reorganisation)
     - grouped_fluor_data: Dictionary of dataframes of fluorescence readings for
     each analyte
-    - peptide_list:
+    - peptide_list: List of peptides included on the input plate
     """
 
     print('Parsing plate {}'.format(plate_path))
@@ -130,8 +131,8 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
     # Reads analyte labels from metadata in "Protocol Information" sheet
     try:
         protocol_df = pd.read_excel(
-            plate_path, sheet_name='Protocol Information', header=None, index_col=0,
-            dtype=str
+            plate_path, sheet_name='Protocol Information', header=None,
+            index_col=0, dtype=str
         )
     except (ValueError, XLRDError):
         raise ValueError(
@@ -493,12 +494,11 @@ def highlight_outliers(
 
     Output
     ----------
-    - plate_df: DataFrame of input fluorescence readings, with identified
-    outliers set to NaN if remove_outliers set to True.
-    - plate_outliers: Dictionary of fluoresence readings identified as outliers
-    (=values), labelled by the file path of the plate and the position of the
-    outlier reading on that plate (=keys), updated now to contain any outliers
-    in the input dataframe of fluorescence readings (plate_df)
+    sub_plate_df: DataFrame of input fluorescence readings, with samples
+    containing more than drop_thresh outliers removed
+    - outlier_dict: Dictionary that records for each row in plate_df (keys) the
+    total number plus the identities of any identified outliers
+    - plate_outliers: Updated list of outlier fluorescence readings
     """
 
     if plate_outliers is None:
@@ -598,13 +598,13 @@ def calc_median(plate_df, raise_warning):
     For each column in an input dataframe, calculates the median value.
 
     Input
-    --------
+    ----------
     - plate_df: DataFrame of input fluorescence readings
     - raise_warning: Boolean that raises an error if a median value is
     calculated to be NaN
 
     Output
-    --------
+    ----------
     - median_df: DataFrame of the median fluorescence value of each column of
     fluoresence readings in the input dataframe. Outliers are not excluded
     before the median calculation, however the median value should be relatively
@@ -657,8 +657,8 @@ def scale_min_max(
     analytes tested on the plate and the values are the corresponding DataFrames
     of fluorescence readings
     - plate_name: Plate ID
-    - no_pep: Dictionary of name given to sample without peptide in input
-    peptide array (value) for each split (key)
+    - no_pep: Dictionary of the name given to the sample without peptide in
+    input peptide array (value) for each split (key)
     - split_name: Name of split, which has been added as a prefix to all of the
     peptide names in the plate columns
     - cols_ignore: List of names of peptides to exclude from the analysis
@@ -677,11 +677,12 @@ def scale_min_max(
 
     Output
     ----------
-    - scaled_plate: Dictionary of dataframes of min max scaled fluorescence
+    - scaled_plate: Dictionary of dataframes of min-max scaled fluorescence
     readings for each analyte
     - plate_outliers: List of outlier fluoresence readings updated now to
     contain any outliers in the input dataframe of fluorescence readings
     (plate_df)
+    - peptide_list: List of peptides included on the input plate
     """
 
     try:
@@ -837,7 +838,7 @@ def draw_heatmap_fingerprints(
     fluor_df, results_dir, scale, class_order=None, prefix='', test=False
 ):
     """
-    Draw a heatmap for each analyte representing the median reading for each
+    Draws a heatmap for each analyte representing the median reading for each
     peptide
 
     Input
@@ -855,6 +856,11 @@ def draw_heatmap_fingerprints(
     - prefix: Prefix to add to the file names of saved plots
     - test: Boolean describing whether the function is being run during the
     program's unit tests - by default is set to False
+
+    Output
+    ----------
+    test_results: Dictionary of the dataframes used to create each plot,
+    returned if test is set to True
     """
 
     if not os.path.isdir(results_dir):
@@ -1000,6 +1006,11 @@ def draw_boxplots(
     - prefix: Prefix to add to the file names of saved plots
     - test: Boolean describing whether the function is being run during the
     program's unit tests - by default is set to False
+
+    Output
+    ----------
+    test_results: Dictionary of the dataframes used to create each plot,
+    returned if test is set to True
     """
 
     # Tests that input arguments are suitable for running the function
@@ -1170,9 +1181,9 @@ class ParseArrayData(DefData):
         max_fluor=260000, test=False
     ):
         """
-        - data_dirs_dict: Dictionary of split names and paths (either absolute
-        or relative) to directory containing xlsx files of fluorescence readings
-        for that split
+        - data_dirs_dict: Dictionary of split names (keys) and paths (either
+        absolute or relative) to directory containing xlsx files of fluorescence
+        readings for that split (values)
         - results_dir: Path (either absolute or relative) to directory where
         output files should be saved. This directory will be created by the
         program and so should not already exist.
@@ -1180,8 +1191,9 @@ class ParseArrayData(DefData):
         in data_dir. Xlsx files in this directory should be named such that the
         repeat label is at the end of the file, e.g. ****_repeat_1.xlsx or
         equivalent.
-        - peptide_dict: Dictionary of split labels and the peptides included in
-        each split, e.g. {'DPH': ['CCHex', 'CCHept'], 'NR': ['CCHex', 'CCHex2']}
+        - peptide_dict: Dictionary of split labels (keys) and the peptides
+        included in each split (values), e.g. {'DPH': ['CCHex', 'CCHept'], 'NR':
+        ['CCHex', 'CCHex2']}
         - control_peptides: Dictionary of peptides (not including "No Peptide")
         in each split to be excluded from the analysis. E.g. Typically we
         exclude the collapsed barrel control (it is only included to check that
@@ -1192,7 +1204,7 @@ class ParseArrayData(DefData):
         from the analysis. Useful if some analytes have not been included in all
         replicates and/or across all features in the splits.
         - gain: Which dataframe of fluorescence data (collected at different
-        gains) to use, default is first listed in xlsx file
+        gains) to use, default is first listed in xlsx file (gain=1)
         - min_fluor: Minimum fluorescence reading that can be measured by the
         plate reader, default is 0
         - max_fluor: Maximum fluorescence reading that can be measured by the
@@ -1237,6 +1249,18 @@ class ParseArrayData(DefData):
                         fluorophore, multi_peptides
                     )
                 )
+            if '_' in fluorophore:
+                raise ValueError(
+                    'Neither split nor peptide names should contain the '
+                    'character "_"'
+                )
+            for peptide in peptide_list:
+                if '_' in peptide:
+                    raise ValueError(
+                        'Neither split nor peptide names should contain the '
+                        'character "_"'
+                    )
+
         # Makes list of all peptides (across all splits)
         all_peptide_list = []
         for fluorophore, peptide_list in self.peptide_dict.items():
@@ -1327,7 +1351,7 @@ class ParseArrayData(DefData):
         the file name)
 
         Input
-        --------
+        ----------
         - ignore_files: Dictionary of list of files (value) in each split (key)
         not to be included in the analysis
         """
@@ -1351,7 +1375,7 @@ class ParseArrayData(DefData):
                             'exist'.format(xlsx, all_files)
                         )
                     if not xlsx.endswith('.xlsx'):
-                        raise Exception(
+                        raise ValueError(
                             'File {} specified to be excluded from the analysis'
                             ' is not an xlsx file'.format(xlsx)
                         )
@@ -1378,14 +1402,14 @@ class ParseArrayData(DefData):
         self.repeat_dict = xlsx_file_dict
 
     def xlsx_to_scaled_df(
-        self, no_pep, scale_method, draw_plot, plot_dir_name,
+        self, no_pep, scale_method, draw_plot, plot_dir_name='',
         outlier_excl_thresh=0.05, drop_thresh=2, k_max=np.nan
     ):
         """
         Parses grouped xlsx files into dataframes and performs min max scaling.
 
         Input
-        --------
+        ----------
         - no_pep: Dictionary of name of sample without peptide in peptide array
         (value) for each split (key)
         - scale_method: Method to use for min-max scaling of the data, set to
@@ -1393,6 +1417,9 @@ class ParseArrayData(DefData):
         - draw_plot: Boolean, determines whether or not to draw a scatter plot
         for each plate, showing the distribution of repeat readings for each
         analyte on that plate (beware, plot drawing is SLOW!)
+        - plot_dir_name: Prefix to give the directories created to store the
+        generated scatter plots. Only need to set this value if draw_plot is
+        True.
         - outlier_excl_thresh: Significance level for discarding outliers (via a
         generalised ESD test), default value is 0.05
         - drop_thresh: The minimum number of outlier readings a sample requires
@@ -1435,7 +1462,7 @@ class ParseArrayData(DefData):
                 except FileNotFoundError:
                     raise FileNotFoundError(
                         'Directory {} doesn\'t exist'.format(
-                            '/'.join(plot_dir.split('/')[:-1])
+                            '/'.join(self.results_dir.split('/')[:-1])
                         )
                     )
 
@@ -1623,6 +1650,11 @@ class ParseArrayData(DefData):
             sub_feature = feature.split('_')[-1]
             if sub_feature in self.peptide_dict[split]:
                 split_features[split].append(feature)
+            else:
+                raise ValueError(
+                    'Neither split nor peptide names should contain the '
+                    'character "_"'
+                )
         self.split_features = split_features
         self.analytes = upd_analytes
 
@@ -1654,7 +1686,7 @@ class ParseArrayData(DefData):
         appropriate format for ML with the functions in train.py
 
         Input
-        --------
+        ----------
         - outlier_excl_thresh: Significance level for discarding outliers (via a
         generalised ESD test), default value is 0.05
         - drop_thresh: The minimum number of outlier readings a sample requires
@@ -1683,7 +1715,8 @@ class ParseArrayData(DefData):
                         if not analyte in repeat_analytes:
                             repeat_analytes.append(analyte)
 
-                for analyte in self.analytes:
+                for analyte in self.analytes:  # Ensures analytes are always
+                # considered (and recorded) in the same order
                     if analyte in repeat_analytes:
                         if not analyte in analyte_dfs_dict.keys():
                             analyte_dfs_dict[analyte] = OrderedDict()
@@ -1696,18 +1729,14 @@ class ParseArrayData(DefData):
                         )
                         cols = list(analyte_df.columns)
                         match = False
-                        for split, split_cols in self.split_features.items():
-                            if cols == split_cols:
-                                match = True
-                                analyte_dfs_dict[analyte][split].append(analyte_df)
-                                break
+                        if cols == self.split_features[split]:
+                            match = True
+                            analyte_dfs_dict[analyte][split].append(analyte_df)
                         if match is False:
-                            exp_cols = []
-                            for split, split_cols in self.split_features.items():
-                                exp_cols += split_cols
                             raise Exception(
                                 'Peptides\n{}\ndo not match any of the expected '
-                                'peptide lists:\n{}'.format(cols, exp_cols)
+                                'peptide lists:\n'
+                                '{}'.format(cols, self.split_features[split])
                             )
 
             for analyte in analyte_dfs_dict.keys():
@@ -1716,7 +1745,8 @@ class ParseArrayData(DefData):
                 for split in analyte_dfs_dict[analyte].keys():
                     if analyte_dfs_dict[analyte][split] == []:
                         raise Exception(
-                            'Data not recorded across all splits for all repeats'
+                            'Data not recorded across all splits for repeat '
+                            '{}'.format(repeat)
                         )
                     analyte_df_list = copy.deepcopy(analyte_dfs_dict[analyte][split])
                     comb_df = pd.concat(analyte_df_list, axis=0).reset_index(drop=True)
@@ -1759,6 +1789,7 @@ class ParseArrayData(DefData):
                         'Repeated columns found across splits:\n'
                         '{}'.format(self.peptide_dict)
                     )
+
                 # Merges same analyte, different barrels
                 comb_df = pd.concat(comb_df_list, axis=1).reset_index(drop=True)
                 scaled_merged_dfs[repeat][analyte] = comb_df
@@ -1770,8 +1801,8 @@ class ParseArrayData(DefData):
         # Will raise an error if any of the median values are calculated to be
         # NaN.
         for repeat in scaled_merged_dfs.keys():
-            for analyte, analyte_df in scaled_merged_dfs[repeat].items():
-                analyte_df = copy.deepcopy(analyte_df)
+            for analyte, orig_analyte_df in scaled_merged_dfs[repeat].items():
+                analyte_df = copy.deepcopy(orig_analyte_df)
                 analyte_df['Analyte'] = [analyte for n in range(analyte_df.shape[0])]
                 outliers['{}_{}'.format(repeat, analyte)] = []
                 outliers['{}_{}'.format(repeat, analyte)] = highlight_outliers(
@@ -1820,7 +1851,9 @@ class ParseArrayData(DefData):
 
         for analyte in self.analytes:
             analyte_indices = [i for i, val in enumerate(labels_list) if val == analyte]
-            analyte_df = orig_fluor_df.iloc[analyte_indices].reset_index(drop=True)
+            analyte_df = copy.deepcopy(
+                orig_fluor_df
+            ).iloc[analyte_indices].reset_index(drop=True)
             sub_analyte_df, analyte_outliers = highlight_outliers(
                 analyte_df, remove_outliers=True, plate_outliers=[],
                 alpha=outlier_excl_thresh, drop_thresh=drop_thresh,
@@ -1888,6 +1921,13 @@ class ParseArrayData(DefData):
         Runs one-way anova to determine if there is a significant difference
         between a barrel's fluorescence readings in the absence and presence of
         analyte
+
+        Output
+        ----------
+        stats_dict: Dictionary listing F and p values output from running
+        one-way ANOVA to determine whether there is a significant difference
+        between the readings measured for the different analytes for a
+        particular peptide
         """
 
         print(
