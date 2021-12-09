@@ -2,6 +2,10 @@
 # python -m unittest tests/test_ml_training.py
 
 import unittest
+from subroutines.train import (
+    make_separate_subclass_splits, bootstrap_data, make_feat_importance_plots,
+    check_arguments, RunML
+)
 
 
 class TestClass(unittest.TestCase):

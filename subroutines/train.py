@@ -11,9 +11,11 @@ import seaborn as sns
 from collections import OrderedDict
 from imblearn.combine import SMOTEENN, SMOTETomek
 from imblearn.over_sampling import RandomOverSampler, SMOTE
+from imblearn.pipeline import Pipeline
 from matplotlib.colors import BASE_COLORS, CSS4_COLORS
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+from mlxtend.evaluate import combined_ftest_5x2cv
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.decomposition import PCA
 from sklearn.ensemble import AdaBoostClassifier, ExtraTreesClassifier
@@ -21,17 +23,88 @@ from sklearn.feature_selection import (
     f_classif, mutual_info_classif, SelectKBest
 )
 from sklearn.inspection import permutation_importance
-from sklearn.model_selection import GridSearchCV, StratifiedKFold
+from sklearn.metrics import (
+    confusion_matrix, accuracy_score, cohen_kappa_score, f1_score,
+    precision_score, recall_score, roc_auc_score
+)
+from sklearn.model_selection import (
+    cross_val_score, GridSearchCV, GroupKFold, LeaveOneGroupOut, LeaveOneOut,
+    RandomizedSearchCV, StratifiedKFold
+)
 from sklearn.preprocessing import RobustScaler
+from sklearn.utils.multiclass import unique_labels
+from types import GeneratorType
 
 sns.set()
 
 if __name__ == 'subroutines.train':
     from subroutines.parse_array_data import DefData
-    from subroutines.exceptions import AlgorithmError
+    from subroutines.exceptions import AlgorithmError, create_generator
 else:
     from array_sensing.subroutines.parse_array_data import DefData
-    from array_sensing.subroutines.exceptions import AlgorithmError
+    from array_sensing.subroutines.exceptions import (
+        AlgorithmError, create_generator
+    )
+
+
+def make_separate_subclass_splits(subclasses, subclass_splits):
+    """
+    Constructs generator that splits an input dataset into train and test splits
+    specified by the user
+
+    Input
+    ----------
+    - subclasses: Numpy array (1D) of subclass values
+    - subclass_splits: Numpy array (2D) of subclasses, each row lists the
+    subclasses to be included in an individual split. Subclasses should not be
+    repeated more than once.
+
+    Output
+    ----------
+    - splits: Generator that creates train test splits, in which the subclasses
+    in each row of subclass_splits form the test set in successive splits
+    """
+
+    if type(subclasses) != np.ndarray:
+        raise TypeError(
+            'Expect "subclasses" to be a (1D) array of subclass values'
+        )
+    if subclasses.shape[1] != 1:
+        raise ValueError('Expect "subclasses" to be a 1D array')
+    if pd.DataFrame(subclasses).isna().any(axis=None):
+        raise ValueError('NaN value(s) detected in "subclasses" array')
+
+    if type(subclass_splits) != np.ndarray:
+        raise TypeError(
+            'Expect "subclass_splits" to be a (2D) array of subclass values'
+        )
+    if pd.DataFrame(subclass_splits).isna().any(axis=None):
+        raise ValueError('NaN value(s) detected in "subclass_splits" array')
+    if np.unique(subclass_splits).size != subclass_splits.size:
+        raise ValueError(
+            'Repeated subclass labels detected in "subclass_splits"'
+        )
+
+    if (   sorted(list(set(list(subclasses))))
+        != sorted(list(set(list(subclass_splits.flatten()))))
+    ):
+        raise ValueError(
+            'Expect the same subclass identities to be found in both '
+            '"subclasses" and "subclass_splits", but instead have detected '
+            'subclasses unique to one of these arguments'
+        )
+
+    for i in range(subclass_splits.shape[0]):
+        split = []
+        subclass_row = subclass_splits[i]
+        for subclass_1 in subclass_row:
+            for j in range(subclasses.shape[0]):
+                subclass_2 = subclasses[j]
+                if subclass_1 == subclass_2:
+                    split.append(j)
+        split = np.array(sorted(split))
+
+        yield split
 
 
 def bootstrap_data(x, y, features, scale):
@@ -146,12 +219,325 @@ def make_feat_importance_plots(
     return importance_df
 
 
+def check_arguments(
+    func_name, x_train, y_train, train_groups, x_test, y_test,
+    selected_features, splits, resampling_method, n_components_pca, run,
+    fixed_params, tuned_params, train_scoring_metric, test_scoring_funcs,
+    n_iter, cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name
+):
+    """
+    Tests whether the input arguments are of the expected type (and where
+    appropriate equal to a value within a specified range)
+
+    Input
+    ----------
+    - func_name: Name of the function "check_arguments" is being called within
+    - x_train: Numpy array of x values of training data
+    - y_train: Numpy array of y values of training data
+    - train_groups: Numpy array of group names of training data
+    - x_test: Numpy array of x values of test data
+    - y_test: Numpy array of y values of test data
+    - selected_features: List of features to include
+    - splits: Generator function that yields train: test splits of the input
+    training data (x_train and y_train) for cross-validation
+    - resampling_method: Name of the method (string) used to resample the
+    data in an imbalanced dataset. Recognised method names are:
+    'no_balancing'; 'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
+    - n_components_pca: The number of components to transform the data to after
+    fitting the data with PCA. If set to None, PCA will not be included in
+    the pipeline.
+    - run: If func_name is "run_ml", one of "randomsearch", "gridsearch" or
+    train". If func_name is "run_nested_CV", either "randomsearch" or
+    "gridsearch".
+    - fixed_params: Dictionary of fixed-value hyperparameters and their
+    selected values, e.g. {n_jobs: -1}
+    - tuned_params: Dictionary of hyperparameter values to search.
+    Key = hyperparameter name (must match the name of the parameter in the
+    selected sklearn ML classifier class); Value = range of values to
+    test for that hyperparameter - note that all numerical ranges must be
+    supplied as numpy arrays in order to avoid throwing an error with the
+    imblearn Pipeline() class
+    - train_scoring_metric: Name of the scoring metric used to measure the
+    performance of the fitted classifier. Metric must be a string and be one of
+    the scoring metrics for classifiers listed at
+    https://scikit-learn.org/stable/modules/model_evaluation.html#scoring-parameter).
+    - test_scoring_funcs: Dictionary of sklearn scoring functions and
+    dictionaries of arguments to be fed into these functions,
+    e.g. {sklearn.metrics.f1_score: {'average': 'macro'}}
+    - n_iter: The number of hyperparameter combinations to test (either an
+    integer value or None)
+    - cv_folds_inner_loop: Integer number of folds to run in the inner
+    cross-validation loop
+    - cv_folds_outer_loop: Either an integer number of folds to run in the outer
+    cross-validation loop, or 'loocv' (leave-one-out cross-validation, sets the
+    number of folds equal to the size of the dataset)
+    - draw_conf_mat: Boolean, dictates whether to plot confusion matrices to
+    compare the model predictions to the test data.
+    - plt_name: Prefix to append to name of the saved plot(s)
+    """
+
+    # Tests that input data is provided as numpy arrays and that their
+    # dimensions match up
+    if type(x_train) != np.ndarray:
+        raise TypeError(
+            'Expect "x_train" to be a numpy array of training data fluorescence'
+            ' readings'
+        )
+    else:
+        if x_train.size > 0:
+            x_train_cols = x_train.shape[1]
+        else:
+            x_train_cols = 0
+
+    if type(y_train) != np.ndarray:
+        raise TypeError(
+            'Expect "y_train" to be a numpy array of training data class labels'
+        )
+    else:
+        if y_train.size > 0:
+            y_train_cols = y_train.shape[1]
+            if y_train_cols != 1:
+                raise ValueError('Expect "y_train" to be a 1D array')
+        else:
+            y_train_cols = 0
+
+    if x_train.shape[0] != y_train.shape[0]:
+        raise ValueError(
+            'Different number of entries (rows) in "x_train" and "y_train"'
+        )
+
+    if not train_groups is None:
+        if type(train_groups) != np.ndarray:
+            raise TypeError(
+                'Expect "train_groups" to be a numpy array of training data '
+                'subclass labels'
+            )
+        if x_train.shape[0] != train_groups.shape[0]:
+            raise ValueError(
+                'Different number of entries (rows) in "x_train" and '
+                '"train_groups"'
+            )
+
+    if type(x_test) != np.ndarray:
+        raise TypeError(
+            'Expect "x_test" to be a numpy array of test data fluorescence'
+            ' readings'
+        )
+    else:
+        if x_test.size > 0:
+            x_test_cols = x_test.shape[1]
+        else:
+            x_test_cols = 0
+
+    if type(y_test) != np.ndarray:
+        raise TypeError(
+            'Expect "y_test" to be a numpy array of test data class labels'
+        )
+    else:
+        if y_test.size > 0:
+            y_test_cols = y_test.shape[1]
+            if y_test.shape[1] != 1:
+                raise ValueError('Expect "y_test" to be a 1D array')
+        else:
+            y_test_cols = 0
+
+    if x_test.shape[0] != y_test.shape[0]:
+        raise ValueError(
+            'Different number of entries (rows) in "x_test" and "y_test"'
+        )
+
+    if x_train_cols != x_test_cols:
+        raise ValueError(
+            'Different number of features incorporated in the training and '
+            'test data'
+        )
+
+    if pd.DataFrame(x_train).isna().any(axis=None):
+        raise ValueError('NaN value(s) detected in "x_train" data')
+    if pd.DataFrame(y_train).isna().any(axis=None):
+        raise ValueError('NaN value(s) detected in "y_train" data')
+    if pd.DataFrame(x_test).isna().any(axis=None):
+        raise ValueError('NaN value(s) detected in "x_test" data')
+    if pd.DataFrame(y_test).isna().any(axis=None):
+        raise ValueError('NaN value(s) detected in "y_test" data')
+
+    # Tests arguments controlling the analysis of the input data
+    if type(selected_features) != list:
+        raise TypeError(
+            'Expect "selected_features" to be a list of features to retain in '
+            'the analysis'
+        )
+    else:
+        if len(selected_features) > x_train_cols:
+            raise ValueError(
+                'There is a greater number of features listed in '
+                '"selected_features" than there are columns in the '
+                '"x_train" input arrays'
+            )
+        if len(selected_features) > x_test_cols:
+            raise ValueError(
+                'There is a greater number of features listed in '
+                '"selected_features" than there are columns in the "x_test"'
+                ' input arrays'
+            )
+
+    if type(splits) != GeneratorType:
+        raise TypeError(
+            'Expect "splits" to be a generator that creates train test splits '
+            'for the input "x_train" array'
+        )
+    else:
+        copy_splits = copy.deepcopy(splits)
+        for split in list(copy_splits):
+            if (split[0].shape[0] + split[1].shape[0]) != x_train.shape[0]:
+                raise ValueError(
+                    'Size of train test splits generated by "splits" does not '
+                    'match the size of the input array "x_train"'
+                )
+
+    exp_resampling_methods = [
+        'no_balancing', 'max_sampling', 'smote', 'smoteenn', 'smotetomek'
+    ]
+    if not resampling_method in exp_resampling_methods:
+        raise ValueError(
+            '"resampling_method" unrecognised - expect value to be one of the '
+            'following list entries:\n{}'.format(exp_resampling_methods)
+        )
+
+    if not n_components_pca is None:
+        if type(n_components_pca) != int:
+            raise TypeError(
+                'Expect "n_components_pca" to be set either to None or to a '
+                'positive integer value between 1 and the number of features '
+                'included in "x_train"'
+            )
+        else:
+            if n_components_pca < 1 or n_components_pca > x_train_cols:
+                raise ValueError(
+                    'Expect "n_components_pca" to be set either to None or to '
+                    'a positive integer value between 1 and the number of '
+                    'features included in "x_train"'
+                )
+
+    if func_name == 'run_ml':
+        if not run in ['randomsearch', 'gridsearch', 'train']:
+            raise ValueError(
+                'Expect "run" to be set to either "randomsearch", "gridsearch" '
+                'or "train"'
+            )
+    elif func_name == 'run_nested_CV':
+        if not run in ['randomsearch', 'gridsearch']:
+            raise ValueError(
+                'Expect "run" to be set to either "randomsearch" or '
+                '"gridsearch"'
+            )
+
+    if not type(fixed_params) in [dict, OrderedDict]:
+        raise TypeError(
+            'Expect "fixed_params" to be a dictionary of parameter values with '
+            'which to run the selected classifier algorithm'
+        )
+
+    if not type(tuned_params) in [dict, OrderedDict]:
+        raise TypeError(
+            'Expect "tuned_params" to be a dictionary of parameter names (keys)'
+            ' and ranges of values to optimise (values) using either random or '
+            'grid search'
+        )
+
+    exp_train_score_metrics = [
+        'accuracy', 'balanced_accuracy', 'top_k_accuracy', 'average_precision',
+        'neg_brier_score', 'f1', 'f1_micro', 'f1_macro', 'f1_weighted',
+        'f1_samples', 'neg_log_loss', 'precision', 'precision_micro',
+        'precision_macro', 'precision_weighted', 'precision_samples', 'recall',
+        'recall_micro', 'recall_macro', 'recall_weighted', 'recall_samples',
+        'jaccard', 'jaccard_micro', 'jaccard_macro', 'jaccard_weighted',
+        'jaccard_samples', 'roc_auc', 'roc_auc_ovr', 'roc_auc_ovo',
+        'roc_auc_ovr_weighted', 'roc_auc_ovo_weighted'
+    ]
+    if not train_scoring_metric in exp_train_score_metrics:
+        raise ValueError(
+            '"train_scoring_metric" not recogised - please specify a string '
+            'corresponding to the name of the metric you would like to use in '
+            'the sklearn.metrics module, e.g. "accuracy".\nExpect metric to be '
+            'in the following list:\n'.format(exp_train_score_metrics)
+        )
+
+    exp_test_scoring_funcs = [
+        accuracy_score, f1_score, precision_score, recall_score,
+        roc_auc_score, cohen_kappa_score
+    ]
+    for scoring_func in test_scoring_funcs.keys():
+        if not scoring_func in exp_test_scoring_funcs:
+            raise ValueError(
+                'Scoring function {} not recognised.\nExpect scoring functions '
+                'to be in the following list:\n'
+                '{}'.format(scoring_func, exp_scoring_funcs)
+            )
+
+    if not n_iter is None:
+        if type(n_iter) != int:
+            raise TypeError(
+                '"n_iter" should be set to a positive integer value'
+            )
+        else:
+            if n_iter < 1:
+                raise ValueError(
+                    '"n_iter" should be set to a positive integer value'
+                )
+
+    if type(cv_folds_inner_loop) != int:
+        raise TypeError(
+            'Expect "cv_folds_inner_loop" to be a positive integer value in the'
+            ' range of 2 - 10'
+        )
+    else:
+        if cv_folds_inner_loop < 2 or cv_folds_inner_loop > 10:
+            raise ValueError(
+                'Expect "cv_folds_inner_loop" to be a positive integer value in'
+                ' the range of 2 - 10'
+            )
+
+    if type(cv_folds_outer_loop) == str:
+        if cv_folds_outer_loop != 'loocv':
+            raise ValueError(
+                'Expect "cv_folds_outer_loop" to be set to either "loocv" '
+                '(leave-one-out cross-validation) or a positive integer in the '
+                'range of 2 - 10'
+            )
+    elif type(cv_folds_outer_loop) == int:
+        if cv_folds_outer_loop < 2 or cv_folds_outer_loop > 10:
+            raise ValueError(
+                'Expect "cv_folds_outer_loop" to be set to either "loocv" '
+                '(leave-one-out cross-validation) or a positive integer in the '
+                'range of 2 - 10'
+            )
+    else:
+        raise TypeError(
+            'Expect "cv_folds_outer_loop" to be set to either "loocv" '
+            '(leave-one-out cross-validation) or a positive integer in the '
+            'range of 2 - 10'
+        )
+
+    if type(draw_conf_mat) != bool:
+        raise TypeError(
+            'Expect "draw_conf_mat" to be a Boolean value (True or False)'
+        )
+
+    if type(plt_name) != str:
+        raise TypeError(
+            'Expect "plt_name" to be a string'
+        )
+
+
 class ManualFeatureSelection(BaseEstimator, TransformerMixin):
     """
     """
 
     def __init__(self, all_features, selected_features):
         """
+        - all_features: A list/array of all features in the input data
+        - selected_features: A list/array of the features to be retained
         """
 
         self.all_features = all_features
@@ -162,6 +548,7 @@ class ManualFeatureSelection(BaseEstimator, TransformerMixin):
 
     def transform(self, X, y=None):
         """
+        Removes features not in "selected_features" from X
         """
 
         df = pd.DataFrame(data=X, index=None, columns=self.all_features)
@@ -232,10 +619,11 @@ class RunML(DefData):
         if classes is None:
             try:
                 classes = fluor_df['Analyte'].tolist()
-            except KeyError(
-                'No "Analyte" column detected in input dataframe - if you do '
-                'not define the "classes" argument, the input dataframe must '
-                'contain an "Analyte" column'
+            except KeyError:
+                raise KeyError(
+                    'No "Analyte" column detected in input dataframe - if you '
+                    'do not define the "classes" argument, the input dataframe'
+                    ' must contain an "Analyte" column'
             )
         if subclasses is None:
             subclasses = [np.nan for n in range(fluor_df.shape[0])]
@@ -307,17 +695,34 @@ class RunML(DefData):
                     'NaN detected in subclass values'
                 )
 
-    def split_train_test_data_random(self, percent_test=0.2, test=False):
+    def split_train_test_data_random(self, x, y, percent_test=0.2, test=False):
         """
         Splits data at random into training and test sets
 
         Input
         ----------
+        - x: Numpy array of x values
+        - y: Numpy array of y values
         - percent_test: Float in the range 0-0.5, defines the fraction of the
         total data to be set aside for model testing
         - test: Boolean describing whether the function is being run during the
         program's unit tests - by default is set to False
+
+        Output
+        ----------
+        - split: [train_indices, test_indices], where train_indices is an array
+        of the rows in x and y that form the training dataset, and test_indices
+        is an array of the rows in x and y that form the testing dataset
         """
+
+        if type(x) != np.ndarray:
+            raise TypeError('Expect "x" to be an array of x values')
+        if type(y) != np.ndarray:
+            raise TypeError('Expect "y" to be an array of y values')
+        if pd.DataFrame(x).isna().any(axis=None):
+            raise ValueError('NaN value(s) detected in "x" data')
+        if pd.DataFrame(y).isna().any(axis=None):
+            raise ValueError('NaN value(s) detected in "y" data')
 
         if not type(percent_test) in [int, float]:
             raise TypeError(
@@ -340,81 +745,62 @@ class RunML(DefData):
                 skf = StratifiedKFold(
                     n_splits=round(1/percent_test), shuffle=True, random_state=0
                 )
-            split = list(skf.split(X=self.x, y=self.y))[0]
+            split = [sub_split for sub_split in list(skf.split(X=x, y=y))[0]]
         elif percent_test == 0:
-            split = [np.array([n for n in range(self.x.shape[0])]), np.array([])]
+            split = [np.array([n for n in range(x.shape[0])]), np.array([])]
 
-        train_indices = split[0]
-        test_indices = split[1]
+        return split
 
-        # Defines train and test datasets
-        self.train_data = copy.deepcopy(
-            self.fluor_data
-        ).iloc[train_indices].reset_index(drop=True)
-        self.test_data = copy.deepcopy(
-            self.fluor_data
-        ).iloc[test_indices].reset_index(drop=True)
-        self.train_x = copy.deepcopy(self.x)[train_indices]
-        self.test_x = copy.deepcopy(self.x)[test_indices]
-        self.train_y = copy.deepcopy(self.y)[train_indices]
-        self.test_y = copy.deepcopy(self.y)[test_indices]
-        if self.sub_classes is None:
-            self.train_groups = None
-            self.test_groups = None
-        else:
-            self.train_groups = copy.deepcopy(self.sub_classes)[train_indices]
-            self.test_groups = copy.deepcopy(self.sub_classes)[test_indices]
-
-    def split_train_test_data_user_defined(self, test_subclasses):
+    def split_train_test_data_user_defined(self, subclasses, test_subclasses):
         """
         Splits data into training and test sets defined by the user. Will only
         run if self.sub_classes is not set to None.
 
         Input
         ----------
-        - test_subclasses: List of the classes to be separated out for the test
-        set. Must not include all of the subclasses in a class
+        - subclasses: Numpy array of subclass values
+        - test_subclasses: Numpy array of the subclasses to be separated out
+        for the test set. Must not include all of the subclasses in a class.
+
+        Output
+        ----------
+        - split: [train_indices, test_indices], where train_indices is an array
+        of the rows in x and y that form the training dataset, and test_indices
+        is an array of the rows in x and y that form the testing dataset
         """
 
-        if self.sub_classes is None:
-            raise ValueError(
-                'Function separates different subclasses into training and test'
-                ' sets, but no subclasses have been defined - please set a '
-                'value for self.sub_classes'
+        if type(subclasses) != np.ndarray:
+            raise TypeError(
+                'Expect "subclasses" to be an array of subclass values'
             )
+        if subclasses.shape[1] != 1:
+            raise ValueError('Expect "subclasses" to be a 1D array')
+        if pd.DataFrame(subclasses).isna().any(axis=None):
+            raise ValueError('NaN value(s) detected in "subclasses" array')
 
-        if not type(test_subclasses) is list:
+        if type(test_subclasses) != np.ndarray:
             raise ValueError(
-                'Expect "test_subclasses" argument to be a list, instead have '
-                'been provided with {}'.format(type(test_subclasses))
+                'Expect "test_subclasses" argument to be an array of subclass '
+                'values, instead have been provided with '
+                '{}'.format(type(test_subclasses))
             )
+        if test_subclasses.shape[1] != 1:
+            raise ValueError('Expect "test_subclasses" to be a 1D array')
+        if pd.DataFrame(test_subclasses).isna().any(axis=None):
+            raise ValueError('NaN value(s) detected in "subclasses" array')
 
         train_indices = []
         test_indices = []
 
-        for n in range(self.sub_classes.shape[0]):
-            if self.sub_classes[n] in test_subclasses:
+        for n in range(subclasses.shape[0]):
+            if subclasses[n] in test_subclasses:
                 test_indices.append(n)
             else:
                 train_indices.append(n)
 
-        # Defines train and test datasets
-        self.train_data = copy.deepcopy(
-            self.fluor_data
-        ).iloc[train_indices].reset_index(drop=True)
-        self.test_data = copy.deepcopy(
-            self.fluor_data
-        ).iloc[test_indices].reset_index(drop=True)
-        self.train_x = copy.deepcopy(self.x)[train_indices]
-        self.test_x = copy.deepcopy(self.x)[test_indices]
-        self.train_y = copy.deepcopy(self.y)[train_indices]
-        self.test_y = copy.deepcopy(self.y)[test_indices]
-        if self.sub_classes is None:
-            self.train_groups = None
-            self.test_groups = None
-        else:
-            self.train_groups = copy.deepcopy(self.sub_classes)[train_indices]
-            self.test_groups = copy.deepcopy(self.sub_classes)[test_indices]
+        split = [np.array(train_indices), np.array(test_indices)]
+
+        return split
 
     def calc_feature_correlations(
         self, train_data=None, correlation_coeff='kendall',
@@ -1165,53 +1551,53 @@ class RunML(DefData):
 
     def run_randomised_search(
         self, x_train, y_train, train_groups, selected_features, clf, splits,
-        resampling_method, n_components_pca, params, scoring_func, n_iter='',
-        test=False
+        resampling_method, n_components_pca, params, scoring_metric,
+        n_iter=None, test=False
     ):
         """
         Randomly picks combinations of hyperparameters from an input grid and
         runs cross-validation to calculate their score using the
         RandomizedSearchCV class from sklearn. The cross-validation pipeline
-        consists of: 1) standardisation of the data across each feature (i.e.
-        subtracting the mean and dividing by the standard deviation); 2)
-        transforming the data to a user-specified number of features with PCA;
-        3) resampling the data if imbalanced; and 4) running the selected
-        classifier with randomly selected combinations of input hyperparameter
-        values. Note that incompatible combinations of hyperparameters will
-        simply be skipped (error_score=np.nan), so there is no need to avoid
-        including e.g. hyperparameters that are defined only if other
-        hyperparameters are defined as particular values. Returns the resuts of
-        the randomised search.
+        consists of: 1) selecting the subset of features to include in the
+        analysis; 2) standardisation of the data across each feature (by
+        subtracting the median and dividing by the IQR); 3) transforming the
+        data to a user-specified number of features with PCA; 4) resampling the
+        data if imbalanced; and 5) running the selected classifier with randomly
+        selected combinations of input hyperparameter values. Note that
+        incompatible combinations of hyperparameters will simply be skipped
+        (error_score=np.nan), so there is no need to avoid including e.g.
+        hyperparameters that are defined only if other hyperparameters are
+        defined as particular values. Returns the results of the randomised
+        search.
 
         Input
         ----------
         - x_train: Numpy array of x values of training data
         - y_train: Numpy array of y values of training data
         - train_groups: Numpy array of group names of training data
-        - selected_features:
+        - selected_features: List of features to include
         - clf: Selected classifier from the sklearn package,
-        e.g. sklearn.ensemble.RandomForestClassifier(n_jobs=-1)
+        e.g. sklearn.svm.LinearSVC('dual'=False)
         - splits: Generator function that yields train: test splits of the input
         data (x_train and y_train) for cross-validation
-        - resampling_method: Name of the method used to resample the data in an
-        imbalanced dataset. Recognised method names are: 'no_balancing';
-        'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
-        - n_components_pca: The number of components to transform the data to after
-        fitting the data with PCA. If set to None, PCA will not be included in
-        the pipeline.
+        - resampling_method: Name of the method (string) used to resample the
+        data in an imbalanced dataset. Recognised method names are:
+        'no_balancing'; 'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
+        - n_components_pca: The number of components to transform the data to
+        after fitting the data with PCA. If set to None, PCA will not be
+        included in the pipeline.
         - params: Dictionary of hyperparameter values to search.
         Key = hyperparameter name (must match the name of the parameter in the
         selected sklearn ML classifier class); Value = range of values to
         test for that hyperparameter - note that all numerical ranges must be
         supplied as numpy arrays in order to avoid throwing an error with the
         imblearn Pipeline() class
-        - scoring_func: The function used to score the fitted classifier on the
-        data set aside for validation during cross-validation. Either a
-        function, or the name of one of the scoring functions in sklearn (see
-        list of recognised names at https://scikit-learn.org/stable/modules/
-        model_evaluation.html#scoring-parameter).
-        - n_iter: The number of hyperparameter combinations to test, if set to ''
-        will be set to either 25 or 10% of the total number of possible
+        - scoring_metric: Name of the scoring metric used to measure the
+        performance of the fitted classifier. Metric must be a string and be one
+        of the scoring metrics for classifiers listed at
+        https://scikit-learn.org/stable/modules/model_evaluation.html#scoring-parameter).
+        - n_iter: The number of hyperparameter combinations to test. If set to
+        None, will be set to either 100 or 1/3 of the total number of possible
         combinations of hyperparameter values specified in the params dictionary
         (whichever is larger).
         - test: Boolean describing whether the function is being run during the
@@ -1222,10 +1608,22 @@ class RunML(DefData):
         - random_search: RandomizedSearchCV object fitted to the training data
         """
 
-        from imblearn.pipeline import Pipeline
-        from sklearn.preprocessing import StandardScaler
-        from sklearn.decomposition import PCA
-        from sklearn.model_selection import RandomizedSearchCV
+        # Checks argument values are suitable to run the function. Arguments
+        # tested by check_arguments that are not input into
+        # run_randomised_search are set to values that will enable the tests to
+        # pass (but are otherwise unused in the run_randomised_search function)
+        check_arguments(
+            func_name='run_randomised_search', x_train=x_train, y_train=y_train,
+            train_groups=train_groups, x_test=np.array([]), y_test=np.array([]),
+            selected_features=selected_features, splits=splits,
+            resampling_method=resampling_method,
+            n_components_pca=n_components_pca, run='randomsearch',
+            fixed_params={}, tuned_params=params,
+            train_scoring_metric=scoring_metric,
+            test_scoring_funcs={}, n_iter=n_iter,
+            cv_folds_inner_loop=5, cv_folds_outer_loop='loocv',
+            draw_conf_mat=True, plt_name=''
+        )
 
         # Determines number of iterations to run. If this is not defined by the
         # user, it is set to 1/3 * the total number of possible parameter value
@@ -1236,7 +1634,7 @@ class RunML(DefData):
         for val in params.values():
             if isinstance(val, (list, np.ndarray)):
                 num_params_combs *= len(val)
-        if n_iter == '':
+        if n_iter is None:
             n_iter = int(num_params_combs*(1/3))
             if n_iter < 100:
                 n_iter = 100
@@ -1244,13 +1642,18 @@ class RunML(DefData):
             n_iter = num_params_combs
 
         # Generates resampling object
-        resampling_obj = self.conv_resampling_method(resampling_method=resampling_method)
-
-        # Runs randomised search pipeline
+        resampling_obj = self.conv_resampling_method(
+            resampling_method=resampling_method
+        )
+        # Generates feature selection object
         feature_selection = ManualFeatureSelection(
             all_features=self.features, selected_features=selected_features
         )
-        standardisation = StandardScaler()
+        # Generates robust scaler object
+        standardisation = RobustScaler()
+
+        # Runs randomised search pipeline. Resampling should be run last since
+        # its performance will be affected by data preprocessing
         if n_components_pca is None:
             std_pca_clf = Pipeline([('feature_selection', feature_selection),
                                     ('std', standardisation),
@@ -1269,7 +1672,7 @@ class RunML(DefData):
 
         random_search = RandomizedSearchCV(
             estimator=std_pca_clf, param_distributions=params, n_iter=n_iter,
-            scoring=scoring_func, n_jobs=-1, cv=splits, error_score=np.nan
+            scoring=scoring_metric, n_jobs=-1, cv=splits, error_score=np.nan
         )
         random_search.fit(X=x_train, y=y_train, groups=train_groups)
 
@@ -1279,22 +1682,22 @@ class RunML(DefData):
 
     def run_grid_search(
         self, x_train, y_train, train_groups, selected_features, clf, splits,
-        resampling_method, n_components_pca, params, scoring_func
+        resampling_method, n_components_pca, params, scoring_metric, test=False
     ):
         """
         Tests all possible combinations of hyperparameters from an input grid
         and runs cross-validation to calculate their score using the
-        GridSearchCV class from sklearn. The cross-validation pipeline
-        consists of: 1) standardisation of the data across each feature (i.e.
-        subtracting the mean and dividing by the standard deviation); 2)
-        transforming the data to a user-specified number of features with PCA;
-        3) resampling the data if imbalanced; and 4) running the selected
-        classifier with all possible combinations of input hyperparameter
-        values. Note that incompatible combinations of hyperparameters will
-        simply be skipped (error_score=np.nan), so there is no need to avoid
-        including e.g. hyperparameters that are defined only if other
-        hyperparameters are defined as particular values. Returns the results of
-        the grid search.
+        GridSearchCV class from sklearn. The cross-validation pipeline consists
+        of: 1) selecting the subset of features to include in the analysis; 2)
+        standardisation of the data across each feature (by subtracting the
+        median and dividing by the IQR); 3) transforming the data to a
+        user-specified number of features with PCA; 4) resampling the data if
+        imbalanced; and 5) running the selected classifier with randomly
+        selected combinations of input hyperparameter values. Note that
+        incompatible combinations of hyperparameters will simply be skipped
+        (error_score=np.nan), so there is no need to avoid including e.g.
+        hyperparameters that are defined only if other hyperparameters are
+        defined as particular values. Returns the results of the grid search.
 
         Input
         ----------
@@ -1302,7 +1705,7 @@ class RunML(DefData):
         - y_train: Numpy array of y values of training data
         - train_groups: Numpy array of group names of training data
         - clf: Selected classifier from the sklearn package,
-        e.g. sklearn.ensemble.RandomForestClassifier(n_jobs=-1)
+        e.g. sklearn.svm.LinearSVC('dual'=False)
         - splits: Generator function that yields train: test splits of the input
         data (x_train and y_train) for cross-validation
         - resampling_method: Name of the method used to resample the data in an
@@ -1317,29 +1720,48 @@ class RunML(DefData):
         test for that hyperparameter - note that all numerical ranges must be
         supplied as numpy arrays in order to avoid throwing an error with the
         imblearn Pipeline() class
-        - scoring_func: The function used to score the fitted classifier on the
-        data set aside for validation during cross-validation. Either a
-        function, or the name of one of the scoring functions in sklearn (see
-        list of recognised names at https://scikit-learn.org/stable/modules/
-        model_evaluation.html#scoring-parameter).
+        - scoring_metric: Name of the scoring metric used to measure the
+        performance of the fitted classifier. Metric must be a string and be one
+        of the scoring metrics for classifiers listed at
+        https://scikit-learn.org/stable/modules/model_evaluation.html#scoring-parameter).
+        - test: Boolean describing whether the function is being run during the
+        program's unit tests - by default is set to False
 
         Output
         ----------
         - grid_search: GridSearchCV object fitted to the training data
         """
 
-        from imblearn.pipeline import Pipeline
-        from sklearn.preprocessing import StandardScaler
-        from sklearn.decomposition import PCA
-        from sklearn.model_selection import GridSearchCV
+        # Checks argument values are suitable to run the function. Arguments
+        # tested by check_arguments that are not input into run_grid_search are
+        # set to values that will enable the tests to pass (but are otherwise
+        # unused in the run_grid_search function)
+        check_arguments(
+            func_name='run_grid_search', x_train=x_train, y_train=y_train,
+            train_groups=train_groups, x_test=np.array([]), y_test=np.array([]),
+            selected_features=selected_features,
+            splits=splits, resampling_method=resampling_method,
+            n_components_pca=n_components_pca, run='gridsearch',
+            fixed_params={}, tuned_params=params,
+            train_scoring_metric=scoring_metric,
+            test_scoring_funcs={}, n_iter=None,
+            cv_folds_inner_loop=5, cv_folds_outer_loop='loocv',
+            draw_conf_mat=True, plt_name=''
+        )
 
         # Generates resampling object
-        resampling_obj = self.conv_resampling_method(resampling_method=resampling_method)
-
+        resampling_obj = self.conv_resampling_method(
+            resampling_method=resampling_method
+        )
+        # Generates feature selection object
         feature_selection = ManualFeatureSelection(
             all_features=self.features, selected_features=selected_features
         )
-        standardisation = StandardScaler()
+        # Generates robust scaler object
+        standardisation = RobustScaler()
+
+        # Runs grid search pipeline. Resampling should be run last since its
+        # performance will be affected by data preprocessing
         if n_components_pca is None:
             std_pca_clf = Pipeline([('feature_selection', feature_selection),
                                     ('std', standardisation),
@@ -1357,7 +1779,7 @@ class RunML(DefData):
                               for key, val in params.items()})
 
         grid_search = GridSearchCV(
-            estimator=std_pca_clf, param_grid=params, scoring=scoring_func,
+            estimator=std_pca_clf, param_grid=params, scoring=scoring_metric,
             n_jobs=-1, cv=splits, error_score=np.nan
         )
         grid_search.fit(X=x_train, y=y_train, groups=train_groups)
@@ -1367,55 +1789,74 @@ class RunML(DefData):
         return grid_search
 
     def train_model(
-        self, x_train, y_train, train_groups, selected_features, clf,
-        resampling_method, n_components_pca, scoring_func
+        self, x_train, y_train, selected_features, clf, resampling_method,
+        n_components_pca, scoring_metric, test=False
     ):
         """
         Trains user-specified model on the training data (without cross-
-        validation). Training data is first standardised (by subtracting the
-        mean) and dividing by the standard deviation, then transformed to a
-        user-specified number of features with PCA, and finally resampled if
-        necessary to balance the class sizes, before it is fed into the model
-        for training.
+        validation). Training data is first filtered to retain only the selected
+        features, next it is standardised (by subtracting the median and
+        dividing by the IQR), then transformed to a user-specified number of
+        features with PCA (this step is skipped if n_components_pca is set to
+        None), and finally resampled if necessary to balance the class sizes,
+        before it is fed into the model for training.
 
         Input
         ----------
         - x_train: Numpy array of x values of training data
         - y_train: Numpy array of y values of training data
-        - train_groups: Numpy array of group names of training data
+        - selected_features: List of features to include
         - clf: Selected classifier from the sklearn package,
-        e.g. sklearn.ensemble.RandomForestClassifier(n_jobs=-1)
+        e.g. sklearn.svm.LinearSVC('dual'=False)
         - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
         - n_components_pca: The number of components to transform the data to
         after fitting the data with PCA. If set to None, PCA will not be
         included in the pipeline.
-        - scoring_func: The function used to score the fitted classifier on the
-        data set aside for validation during cross-validation. Either a
-        function, or the name of one of the scoring functions in sklearn (see
-        list of recognised names at https://scikit-learn.org/stable/modules/
-        model_evaluation.html#scoring-parameter).
+        - scoring_metric: Name of the scoring metric used to measure the
+        performance of the fitted classifier. Metric must be a string and be one
+        of the scoring metrics for classifiers listed at
+        https://scikit-learn.org/stable/modules/model_evaluation.html#scoring-parameter).
+        - test: Boolean describing whether the function is being run during the
+        program's unit tests - by default is set to False
 
         Output
         ----------
         - std_pca_clf: Model fitted to the training data. This can be fed into
-        test_model to measure how well the model predicts the classes of the
-        test data set aside by split_train_test_data.
+        test_model function to measure how well the model predicts the classes
+        of the test data set aside by split_train_test_data.
         """
 
-        from imblearn.pipeline import Pipeline
-        from sklearn.preprocessing import RobustScaler
-        from sklearn.decomposition import PCA
-        from sklearn.model_selection import cross_val_score
+        # Checks argument values are suitable to run the function. Arguments
+        # tested by check_arguments that are not input into train_model are set
+        # to values that will enable the tests to pass (but are otherwise unused
+        # in the train_model function)
+        check_arguments(
+            func_name='train_model', x_train=x_train, y_train=y_train,
+            train_groups=None, x_test=np.array([]), y_test=np.array([]),
+            selected_features=selected_features,
+            splits=create_generator(x_train.shape[0]),
+            resampling_method=resampling_method,
+            n_components_pca=n_components_pca, run='train', fixed_params={},
+            tuned_params={}, train_scoring_metric=scoring_metric,
+            test_scoring_funcs={}, n_iter=None, cv_folds_inner_loop=5,
+            cv_folds_outer_loop='loocv', draw_conf_mat=True, plt_name=''
+        )
 
         # Generates resampling object
-        resampling_obj = self.conv_resampling_method(resampling_method=resampling_method)
-
+        resampling_obj = self.conv_resampling_method(
+            resampling_method=resampling_method
+        )
+        # Generates feature selection object
         feature_selection = ManualFeatureSelection(
             all_features=self.features, selected_features=selected_features
         )
+        # Generates robust scaler object
         standardisation = RobustScaler()
+
+        # Runs model training pipeline. Resampling should be run last since its
+        # performance will be affected by data preprocessing
         if n_components_pca is None:
             std_pca_clf = Pipeline([('feature_selection', feature_selection),
                                     ('std', standardisation),
@@ -1435,14 +1876,15 @@ class RunML(DefData):
         return std_pca_clf
 
     def test_model(
-        self, x_test, y_test, clf, test_scoring_funcs, draw_conf_mat=True
+        self, x_test, y_test, clf, test_scoring_funcs, draw_conf_mat=True,
+        plt_name='', test=False
     ):
         """
         Tests model (previously fitted to the training data using e.g.
         train_model function) by predicting the class labels of test data.
         Scores the model by comparing the predicted and actual class labels
-        across a range of user-specified scoring functions, and plots confusion
-        matrix.
+        across a range of user-specified scoring functions, plus plots confusion
+        matrices.
 
         Input
         ----------
@@ -1450,24 +1892,43 @@ class RunML(DefData):
         - y_test: Numpy array of y values of test data
         - clf: Model previously fitted to the training data
         - test_scoring_funcs: Dictionary of sklearn scoring functions and
-        dictionaries of arguments to be fed into these functions.
-        E.g. sklearn.metrics.f1_score: {'average': 'macro'}
-        - draw_conf_mat: Boolean, dictates whether or not confusion matrices are
-        plotted.
+        dictionaries of arguments to be fed into these functions,
+        e.g. {sklearn.metrics.f1_score: {'average': 'macro'}}
+        - draw_conf_mat: Boolean, dictates whether to plot confusion matrices to
+        compare the model predictions to the test data. By default set to True.
+        - plt_name: Prefix to append to the names of the saved plots
+        - test: Boolean describing whether the function is being run during the
+        program's unit tests - by default is set to False
 
         Output
         ----------
+        - predictions: Numpy array of the predicted class values made by the
+        trained classifier (clf)
         - test_scores: Dictionary of user-specified scoring functions and their
         values as calculated from the class label predictions made by the model
         on the testing data
         """
 
-        from sklearn.metrics import confusion_matrix
-        from sklearn.utils.multiclass import unique_labels
+        # Checks argument values are suitable to run the function. Arguments
+        # tested by check_arguments that are not input into test_model are set
+        # to values that will enable the tests to pass (but are otherwise unused
+        # in the test_model function)
+        check_arguments(
+            func_name='test_model', x_train=np.array([]), y_train=np.array([]),
+            train_groups=None, x_test=x_test, y_test=y_test,
+            selected_features=[], splits=create_generator(x_train.shape[0]),
+            resampling_method='no_balancing', n_components_pca=None,
+            run='randomsearch', fixed_params={}, tuned_params={},
+            train_scoring_metric='accuracy',
+            test_scoring_funcs=test_scoring_funcs, n_iter=None,
+            cv_folds_inner_loop=5, cv_folds_outer_loop='loocv',
+            draw_conf_mat=draw_conf_mat, plt_name=plt_name
+        )
 
-        # Uses trained model to predict classes of test data. Note that
-        # standardisation and PCA will be performed within the pipeline, so
-        # don't need to do this manually.
+        # Uses trained model to predict classes of test data. Note that feature
+        # selection, scaling, PCA and rebalancing will be performed within the
+        # pipeline on the test data, so don't need to do this manually
+        # beforehand
         predictions = clf.predict(X=x_test)
 
         # Calculates selected scoring metrics
@@ -1476,6 +1937,9 @@ class RunML(DefData):
             if func.__name__ == 'cohen_kappa_score':
                 params['y1'] = y_test
                 params['y2'] = predictions
+            elif func.__name__ == 'roc_auc_score':
+                params['y_true'] = y_test
+                params['y_score'] = predictions
             else:
                 params['y_true'] = y_test
                 params['y_pred'] = predictions
@@ -1493,10 +1957,11 @@ class RunML(DefData):
                     print('Normalised over {} label ({})'.format(
                         method, method_label[1]
                     ))
+
                 plt.clf()
                 labels = unique_labels(y_test, predictions)
-                # Below ensures that predicted and true labels are on the correct axes,
-                # so think carefully before updating!
+                # Below ensures that predicted and true labels are on the
+                # correct axes, so think carefully before updating!
                 sns.heatmap(
                     data=confusion_matrix(y_true=y_test, y_pred=predictions,
                                           labels=labels, normalize=method),
@@ -1504,38 +1969,47 @@ class RunML(DefData):
                     yticklabels=True, fmt='.3f'
                 )
                 ax = plt.gca()
-                ax.set(xticklabels=labels, yticklabels=labels, xlabel='Predicted label',
-                       ylabel='True label')
+                ax.set(xticklabels=labels, yticklabels=labels,
+                       xlabel='Predicted label', ylabel='True label')
                 plt.xticks(rotation='vertical')
                 plt.yticks(rotation='horizontal')
-                plt.savefig('{}/{}{}_confusion_matrix.svg'.format(
-                    self.results_dir, type(clf).__name__, method_label[0]
+                plt.savefig('{}/{}{}{}_confusion_matrix.svg'.format(
+                    self.results_dir, plt_name, type(clf).__name__,
+                    method_label[0]
                 ))
-                plt.show()
+                if test is False:
+                    plt.show()
 
         return predictions, test_scores
 
     def run_ml(
         self, clf, x_train, y_train, train_groups, x_test, y_test,
-        selected_features, n_components_pca, run, params, train_scoring_func,
-        test_scoring_funcs=None, resampling_method='no_balancing', n_iter='',
-        cv_folds=5, draw_conf_mat=True
+        selected_features, splits, resampling_method, n_components_pca, run,
+        params, train_scoring_metric, test_scoring_funcs=None, n_iter=None,
+        cv_folds=5, draw_conf_mat=True, plt_name='', test=False
     ):
         """
-        Loops over user-specified data resampling methods and runs clf algorithm
-        to: either a) test a range of hyperparameter combinations with
-        RandomizedSearchCV or GridSearchCV to decide upon the optimal
-        combination of hyperparameter values; or b) train and test the model.
+        Function to either test a range of parameter combinations with
+        RandomizedSearchCV or GridSearchCV for a particular model, or to train
+        and test a model using a predefined set of parameters.
 
         Input
         ----------
         - clf: Selected classifier from the sklearn package,
-        e.g. sklearn.ensemble.RandomForestClassifier(n_jobs=-1)
+        e.g. sklearn.svm.LinearSVC('dual'=False)
         - x_train: Numpy array of x values of training data
         - y_train: Numpy array of y values of training data
         - train_groups: Numpy array of group names of training data
         - x_test: Numpy array of x values of test data
         - y_test: Numpy array of y values of test data
+        - selected_features: List of features to include
+        - splits: Either a generator function that yields train: test splits of
+        the input training data (x_train and y_train) for cross-validation, or
+        set to None (in which case run_ml runs stratified k-folds/group k-folds
+        in sklearn to construct the generator, as directed by "cv_folds")
+        - resampling_method: Name of the method used to resample the data in an
+        imbalanced dataset. Recognised method names are: 'no_balancing';
+        'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
         - n_components_pca: The number of components to transform the data to
         after fitting the data with PCA. If set to None, PCA will not be
         included in the pipeline.
@@ -1552,17 +2026,13 @@ class RunML(DefData):
         Pipeline() class. Else if run == 'train', params is also a dictionary of
         hyperparameters, but in this case a single value is provided for each
         hyperparameter as opposed to a range.
-        - train_scoring_func: The function used to score the fitted classifier
-        on the data set aside for validation during cross-validation. Either a
-        function, or the name of one of the scoring functions in sklearn (see
-        list of recognised names at https://scikit-learn.org/stable/modules/
-        model_evaluation.html#scoring-parameter).
+        - train_scoring_metric: Name of the scoring metric used to measure the
+        performance of the fitted classifier. Metric must be a string and be one
+        of the scoring metrics for classifiers listed at
+        https://scikit-learn.org/stable/modules/model_evaluation.html#scoring-parameter).
         - test_scoring_funcs: Dictionary of sklearn scoring functions and
         dictionaries of arguments to be fed into these functions.
-        E.g. sklearn.metrics.f1_score: {'average': 'macro'}
-        - resampling_method: Name of the method used to resample the data in an
-        imbalanced dataset. Recognised method names are: 'no_balancing';
-        'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
+        E.g. {sklearn.metrics.f1_score: {'average': 'macro'}}
         - n_iter: Integer number of hyperparameter combinations to test / ''. If
         set to '' will be set to either 100 or 1/3 of the total number of
         possible combinations of hyperparameter values specified in the params
@@ -1572,143 +2042,203 @@ class RunML(DefData):
         validation data, with 80% and 20% of the data forming the training and
         validation sets respectively.
         - draw_conf_mat: Boolean, dictates whether to plot confusion matrices to
-        compare the model predictions to the test data
+        compare the model predictions to the test data. By default set to True.
+        - plt_name: Prefix to append to the names of the saved plots
+        - test: Boolean describing whether the function is being run during the
+        program's unit tests - by default is set to False
 
         Output
         ----------
-        - searches: Dictionary of the selected resampling methods and the
+        - search: Dictionary of the selected resampling methods and the
         corresponding output from fitting the user-specified algorithm (either a
         RandomizedSearchCV / GridSearchCV object, or a model fitted to the
         resampled training data).
-        - train_scores: The value of the selected scoring function calculated
-        from cross-validation of the model on the training data.
+        - trained_clf: Model fitted to the training data
+        - predictions: Numpy array of the predicted class values made by the
+        trained classifier
         - test_scores: Dictionary of user-specified scoring functions and their
         values as calculated from the class label predictions made by the model
         on the testing data
         """
 
-        from sklearn.model_selection import StratifiedKFold
-        from sklearn.model_selection import GroupKFold
+        # Checks argument values are suitable to run the function. Arguments
+        # tested by check_arguments that are not input into run_ml are set to
+        # values that will enable the tests to pass (but are otherwise unused in
+        # the run_ml function)
+        if splits is None:
+            check_splits = create_generator(x_train.shape[0])
+        else:
+            check_splits = copy.deepcopy(splits)
+        check_arguments(
+            func_name='run_ml', x_train=x_train, y_train=y_train,
+            train_groups=train_groups, x_test=x_test, y_test=y_test,
+            selected_features=selected_features, splits=check_splits,
+            resampling_method=resampling_method,
+            n_components_pca=n_components_pca, run=run, fixed_params={},
+            tuned_params=params, train_scoring_metric=train_scoring_metric,
+            test_scoring_funcs=test_scoring_funcs, n_iter=n_iter,
+            cv_folds_inner_loop=cv_folds, cv_folds_outer_loop='loocv',
+            draw_conf_mat=draw_conf_mat, plt_name=plt_name
+        )
 
-        if run in ['randomsearch', 'gridsearch']:
-            skf = ''
-            gkf = ''
-            if self.randomise is True:  No longer defined
-                # There must be more than cv_folds instances of each dataset
+        if splits is None and run in ['randomsearch', 'gridsearch']:
+            skf = None
+            gkf = None
+
+            # There must be more than cv_folds instances of each dataset
+            if cv_folds > x_train.shape[0]:
+                raise ValueError(
+                    'The number of k-folds must be smaller than the number of '
+                    'data points in the training dataset'
+                )
+            if x_test.size > 0 and cv_folds > x_test.shape[0]:
+                raise ValueError(
+                    'The number of k-folds must be smaller than the number of '
+                    'data points in the testing dataset'
+                )
+
+            if train_groups is None:
                 skf = StratifiedKFold(n_splits=cv_folds, shuffle=True)
                 splits = skf.split(X=x_train, y=y_train)
             else:
                 gkf = GroupKFold(n_splits=cv_folds)
                 splits = gkf.split(X=x_train, y=y_train, groups=train_groups)
-        else:
-            splits = ''
 
         if run == 'randomsearch':
             search = self.run_randomised_search(
                 x_train, y_train, train_groups, selected_features, clf, splits,
-                resampling_method, n_components_pca, params, train_scoring_func,
-                n_iter
+                resampling_method, n_components_pca, params,
+                train_scoring_metric, n_iter, test
             )
             return search
+
         elif run == 'gridsearch':
             search = self.run_grid_search(
                 x_train, y_train, train_groups, selected_features, clf, splits,
-                resampling_method, n_components_pca, params, train_scoring_func
+                resampling_method, n_components_pca, params,
+                train_scoring_metric, test
             )
             return search
+
         elif run == 'train':
-            search = self.train_model(
-                x_train, y_train, train_groups, selected_features, clf,
-                resampling_method, n_components_pca, train_scoring_func
+            trained_clf = self.train_model(
+                x_train, y_train, selected_features, clf, resampling_method,
+                n_components_pca, train_scoring_metric, test
             )
             predictions, test_scores = self.test_model(
-                x_test, y_test, search, test_scoring_funcs, draw_conf_mat
+                x_test, y_test, trained_clf, test_scoring_funcs, draw_conf_mat,
+                plt_name, test
             )
-            return search, test_scores, predictions
+            return trained_clf, predictions, test_scores
 
     def run_nested_CV(
-        self, clf, x, y, groups, selected_features, n_components_pca, run,
-        fixed_params, tuned_params, train_scoring_func,
-        test_scoring_funcs=None, resampling_method='no_balancing', n_iter='',
-        cv_folds_inner_loop=5, cv_folds_outer_loop='loocv', draw_conf_mat=False
+        self, clf, x, y, groups, selected_features, inner_splits, outer_splits,
+        resampling_method, n_components_pca, run, fixed_params, tuned_params,
+        train_scoring_metric, test_scoring_funcs, n_iter=None,
+        cv_folds_inner_loop=5, cv_folds_outer_loop='loocv', draw_conf_mat=False,
+        plt_name='', test=False
     ):
         """
-        Fits an input sklearn classifier to the data.
+        Runs nested cross-validation to fit an input sklearn classifier to the
+        data
 
         Input
         ----------
         - clf: Selected classifier from the sklearn package,
-        e.g. sklearn.ensemble.RandomForestClassifier
+        e.g. sklearn.svm.LinearSVC
         - x: Numpy array of all x data (no need to have already split into
         training and test data)
         - y: Numpy array of all y data (no need to have already split into
         training and test data)
         - groups: Numpy array of all group names (no need to have already split
         into training and test data)
+        - selected_features: List of features to include
+        - inner_splits: Either a generator function that yields train: test
+        splits or set to None. Is provided to the run_ml function called by
+        run_nested_CV as its "splits" parameter.
+        - outer_splits: Either a generator function that yields train: test
+        splits of the input data (x and y) for cross-validation, or set to None
+        (in which case run_nested_CV runs leave-one-out cross-validation/
+        stratified k-folds/group k-folds in sklearn to construct the generator)
+        - resampling_method: Name of the method used to resample the data in an
+        imbalanced dataset. Recognised method names are: 'no_balancing';
+        'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
         - n_components_pca: The number of components to transform the data to
         after fitting the data with PCA. If set to None, PCA will not be
         included in the pipeline.
         - run: Either 'randomsearch' or 'gridsearch'. Directs the function
         whether to run inner loop cross-validation with RandomizedSearchCV or
         GridSearchCV to select a suitable combination of hyperparameter values.
-        - fixed_params: Dictionary of hyperparameters and their selected values
-        that remain constant regardless of the value of 'run' (e.g. n_jobs = -1)
+        - fixed_params: Dictionary of fixed-value hyperparameters and their
+        selected values, e.g. {n_jobs: -1}
         - tuned_params: Dictionary of hyperparameter values to search.
         Key = hyperparameter name (must match the name of the parameter in the
         selected clf class); Value = range of values to test for that
         hyperparameter - note that all numerical ranges must be supplied as
         numpy arrays in order to avoid throwing an error with the imblearn
         Pipeline() class.
-        - train_scoring_func: The function used to score the fitted classifier
-        on the data set aside for validation during cross-validation. Either a
-        function, or the name of one of the scoring functions in sklearn (see
-        list of recognised names at https://scikit-learn.org/stable/modules/
-        model_evaluation.html#scoring-parameter).
+        - train_scoring_metric: Name of the scoring metric used to measure the
+        performance of the fitted classifier. Metric must be a string and be one
+        of the scoring metrics for classifiers listed at
+        https://scikit-learn.org/stable/modules/model_evaluation.html#scoring-parameter).
         - test_scoring_funcs: Dictionary of sklearn scoring functions and
-        dictionaries of arguments to be fed into these functions.
-        E.g. sklearn.metrics.f1_score: {'average': 'macro'}
-        - resampling_method: Name of the method used to resample the data in an
-        imbalanced dataset. Recognised method names are: 'no_balancing';
-        'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
+        dictionaries of arguments to be fed into these functions,
+        e.g. {sklearn.metrics.f1_score: {'average': 'macro'}}, that are used to
+        measure the performance of the trained classifier on a holdout dataset
         - n_iter: Required if run == 'randomsearch'. Integer number of
-        hyperparameter combinations to test / ''. If set to '' will be set to
+        hyperparameter combinations to test / None. If None, will be set to
         either 100 or 1/3 of the total number of possible combinations of
         hyperparameter values specified in the params dictionary (whichever is
         larger).
-        - cv_folds_inner_loop: Integer number of folds to run in
-        cross-validation (loops = 1) / the inner cross-validation loop
-        (loops = 2). E.g. as a default cv_folds_inner_loop = 5, which generates
-        5 folds of training and validation data, with 80% and 20% of the data
-        forming the  training and validation sets respectively.
+        - cv_folds_inner_loop: Integer number of folds to run in the inner
+        cross-validation loop. E.g. as a default cv_folds_inner_loop = 5, which
+        generates 5 folds of training and validation data, with 80% and 20% of
+        the data forming the training and validation sets respectively.
         - cv_folds_outer_loop: Integer number of folds to run in the outer
-        cross-validation loop (loops = 2). Set to 'loocv' as default, which
-        specifies a number of folds equal to the size of the dataset
-        (leave-one-out cross-validation)
+        cross-validation loop. Alternatively, set to 'loocv' (default value),
+        which sets the number of folds equal to the size of the dataset
+        (leave-one-out cross-validation).
         - draw_conf_mat: Boolean, dictates whether to plot confusion matrices to
-        compare the model predictions to the test data
+        compare the model predictions to the test data. By default set to False.
+        - plt_name: Prefix to append to the names of the saved plots
+        - test: Boolean describing whether the function is being run during the
+        program's unit tests - by default is set to False
 
         Output
         ----------
-        - searches: Dictionary of the selected resampling methods and the
-        corresponding output from fitting the user-specified algorithm (either a
-        RandomizedSearchCV / GridSearchCV object, or a model fitted to the
-        resampled training data).
-        - train_scores: The value of the selected scoring function calculated
-        from cross-validation of the model on the training data.
-        - test_scores: Dictionary of user-specified scoring functions and their
-        values as calculated from the class label predictions made by the model
-        on the testing data
+        - nested_cv_search: Dictionary of trained models and the values of the
+        metrics included in test_score_funcs, for each split in the outer loop
+        of nested cross-validation
         """
 
-        from sklearn.model_selection import (
-            GroupKFold, LeaveOneOut, StratifiedKFold
+        # Checks argument values are suitable to run the function. Arguments
+        # tested by check_arguments that are not input into run_nested_CV are
+        # set to values that will enable the tests to pass (but are otherwise
+        # unused in the run_nested_CV function)
+        if outer_splits is None:  # Inner_splits is checked in the run_ml
+        # function called below
+            check_splits = create_generator(x.shape[0])
+        else:
+            check_splits = copy.deepcopy(outer_splits)
+        check_arguments(
+            func_name='run_nested_CV', x_train=x, y_train=y,
+            train_groups=groups, x_test=np.array([]), y_test=np.array([]),
+            selected_features=selected_features, splits=check_splits,
+            resampling_method=resampling_method,
+            n_components_pca=n_components_pca, run=run,
+            fixed_params=fixed_params, tuned_params=tuned_params,
+            train_scoring_metric=train_scoring_metric,
+            test_scoring_funcs=test_scoring_funcs, n_iter=n_iter,
+            cv_folds_inner_loop=cv_folds_inner_loop,
+            cv_folds_outer_loop=cv_folds_outer_loop,
+            draw_conf_mat=draw_conf_mat, plt_name=plt_name
         )
 
         nested_cv_search = OrderedDict({
             'inner_loop_searches': [],
             'outer_loop_models': [],
             'outer_loop_params': [],
-            'test_scores': {},
+            'test_scores': OrderedDict(),
             'predictions': [],
             'x_true': [],
             'y_true': []
@@ -1719,70 +2249,104 @@ class RunML(DefData):
             ] = []
 
         # Split data into train and test sets
-        loocv = ''
-        skf = ''
-        gkf = ''
-        if type(cv_folds_outer_loop) == str:
-            if cv_folds_outer_loop.lower().replace(' ', '') == 'loocv':
-                loocv = LeaveOneOut()
-                splits = loocv.split(X=x, y=y)
+        if outer_splits is None:
+            loocv = None
+            logo = None
+            skf = None
+            gkf = None
+            if type(cv_folds_outer_loop) == str:
+                if cv_folds_outer_loop.lower().replace(' ', '') == 'loocv':
+                    if groups is None:
+                        loocv = LeaveOneOut()
+                        outer_splits = list(loocv.split(X=x, y=y))
+                    else:
+                        logo = LeaveOneGroupOut()
+                        outer_splits = list(loocv.split(X=x, y=y, groups=groups))
+                else:
+                    raise ValueError(
+                        'Expect "cv_folds_outer_loop" to be set either to '
+                        '"loocv" or to a positive integer value in the range of'
+                        ' 2 - 10'
+                    )
             else:
-                raise ValueError(
-                    'Value {} for CV method in outer loop not recognised - '
-                    'set to either "loocv" or an integer number of '
-                    'folds'.format(cv_folds_outer_loop)
-                )
-        else:
-            if self.randomise is True:  No longer defined
-                skf = StratifiedKFold(n_splits=cv_folds_outer_loop, shuffle=True)
-                splits = skf.split(X=x, y=y)
-            else:
-                gkf = GroupKFold(n_splits=cv_folds_outer_loop)
-                splits = gkf.split(X=x, y=y, groups=groups)
+                # There must be more than cv_folds_outer_loop instances of the
+                # dataset
+                if cv_folds_outer_loop > x.shape[0]:
+                    raise ValueError(
+                        'The number of k-folds must be smaller than the number '
+                        'of data points'
+                    )
+                # Generates splits
+                if groups is None:
+                    skf = StratifiedKFold(n_splits=cv_folds_outer_loop, shuffle=True)
+                    outer_splits = list(skf.split(X=x, y=y))
+                else:
+                    gkf = GroupKFold(n_splits=cv_folds_outer_loop)
+                    outer_splits = list(gkf.split(X=x, y=y, groups=groups))
 
-        for split in splits:
+        for split in outer_splits:
             train_split = split[0]
             test_split = split[1]
-            x_train = x[train_split]
-            y_train = y[train_split]
-            x_test = x[test_split]
-            y_test = y[test_split]
+            x_train = copy.deepcopy(x)[train_split]
+            y_train = copy.deepcopy(y)[train_split]
+            x_test = copy.deepcopy(x)[test_split]
+            y_test = copy.deepcopy(y)[test_split]
             if groups is not None:
-                train_groups = groups[train_split]
+                train_groups = copy.deepcopy(groups)[train_split]
             else:
                 train_groups = None
 
             # Random / grid search of hyperparameters on training set
             train_clf = clf(**fixed_params)
             search = self.run_ml(
-                train_clf, x_train, y_train, train_groups, '', '',
-                selected_features, n_components_pca, run, tuned_params,
-                train_scoring_func, {}, resampling_method, n_iter,
-                cv_folds_inner_loop, draw_conf_mat
+                train_clf, x_train, y_train, train_groups, np.array([]),
+                np.array([]), selected_features, inner_splits,
+                resampling_method, n_components_pca, run, tuned_params,
+                train_scoring_metric, {}, n_iter, cv_folds_inner_loop,
+                draw_conf_mat, '', test
             )
             nested_cv_search['inner_loop_searches'].append(search)
+
+            # Train clf with best hyperparameter selection on entire training
+            # split, then make predictions and calculate selected statistics on
+            # test split
             best_params = OrderedDict({
                 key.split('__')[1]: val for key, val in search.best_params_.items()
             })
-            # Train clf with best hyperparameter selection on training split,
-            # then make predictions and calculate selected statistics on test
-            # split
             best_params = OrderedDict({**fixed_params, **best_params})
             test_clf = clf(**best_params)
-            split_search, split_test_scores, split_predictions = self.run_ml(
+            fold_search, fold_test_scores, fold_predictions = self.run_ml(
                 test_clf, x_train, y_train, train_groups, x_test, y_test,
-                selected_features, n_components_pca, 'train', {},
-                train_scoring_func, test_scoring_funcs, resampling_method,
-                n_iter, '', draw_conf_mat
+                selected_features, None, resampling_method, n_components_pca,
+                'train', {}, train_scoring_metric, test_scoring_funcs, n_iter,
+                cv_folds_inner_loop, draw_conf_mat, plt_name, test
             )
-            nested_cv_search['outer_loop_params'].append(best_params)
-            nested_cv_search['outer_loop_models'].append(split_search)
 
-            for scoring_func_name, val in split_test_scores.items():
+            nested_cv_search['outer_loop_params'].append(best_params)
+            nested_cv_search['outer_loop_models'].append(fold_search)
+            for scoring_func_name, val in fold_test_scores.items():
                 nested_cv_search['test_scores'][scoring_func_name].append(val)
-            nested_cv_search['predictions'].append(split_predictions)
+            nested_cv_search['predictions'].append(fold_predictions)
             nested_cv_search['x_true'].append(x_test)
             nested_cv_search['y_true'].append(y_test)
+
+        # Checks nested_cv_search dictionary has been updated with the expected
+        # values
+        for key, val in nested_cv_search.items():
+            if key == 'test_scores':
+                for sub_key, sub_val in nested_cv_search[key].items():
+                    if len(sub_val) != len(splits):
+                        raise Exception(
+                            'Output dictionary from running nested '
+                            'cross-validation does not contain the expected '
+                            'number of entries'
+                        )
+            else:
+                if len(val) != len(splits):
+                    raise Exception(
+                        'Output dictionary from running nested cross-validation'
+                        ' does not contain the expected number of entries'
+                    )
 
         # Calculate average, standard deviation and percentiles of interest
         # across cv_folds_outer_loop folds
@@ -1798,35 +2362,117 @@ class RunML(DefData):
                 np.percentile(score_list, 2.5), np.percentile(score_list, 50),
                 np.percentile(score_list, 97.5)
             ]
+
+        # Records which outer loop parameters lead to the best model performance
         best_index = np.where(
-               nested_cv_search['test_scores'][train_scoring_func]
-            == np.amax(nested_cv_search['test_scores'][train_scoring_func])
+               nested_cv_search['test_scores'][train_scoring_metric]
+            == np.amax(nested_cv_search['test_scores'][train_scoring_metric])
         )[0][0]
-        nested_cv_search['best_outer_loop_params'] = nested_cv_search['outer_loop_params'][best_index]
+        nested_cv_search['best_outer_loop_params'] = nested_cv_search[
+            'outer_loop_params'
+        ][best_index]
 
         return nested_cv_search
 
     def run_5x2_CV_paired_t_test(
-        self, x, y, groups, selected_features_1, selected_features_2,
+        self, x, y, selected_features_1, selected_features_2,
         classifier_1, classifier_2, params_1, params_2, resampling_method_1,
-        resampling_method_2, n_components_pca_1, n_components_pca_2, scoring_func
+        resampling_method_2, n_components_pca_1, n_components_pca_2,
+        scoring_metric, test=False
     ):
         """
         Runs 5x2 CV combined F test to calculate whether there is a significant
-        difference in performance between two classifier models.
+        difference in performance between two classifier models. These models
+        can differ in: 1) the classifier algorithm selected; 2) the values of
+        the classifier parameter values; 3) the features selected in the input
+        data; 4) the number of PCA components used to transform of the input
+        data; or 5) the method used to resample imbalanced classes in the input
+        dataset.
+
+        Input
+        ----------
+        - x: Numpy array of all x data (no need to have already split into
+        training and test data)
+        - y: Numpy array of all y data (no need to have already split into
+        training and test data)
+        - selected_features_1: List of features to include when training
+        classifier_1
+        - selected_features_2: List of features to include when training
+        classifier_2
+        - classifier_1: Selected classifier from the sklearn package,
+        e.g. sklearn.svm.LinearSVC, whose performance on the input data is to be
+        compared to classifier_2
+        - classifier_2: Selected classifier from the sklearn package,
+        e.g. sklearn.ensemble.AdaBoost, whose performance on the input data is
+        to be compared to classifier_1
+        - params_1: Dictionary of fixed-value hyperparameters and their
+        selected values, e.g. {n_jobs: -1}, to be used for classifier 1
+        - params_2: Dictionary of fixed-value hyperparameters and their
+        selected values, e.g. {n_jobs: -1}, to be used for classifier 2
+        - resampling_method_1: Name of the method used to resample the data in
+        the classifier 1 pipeline. Recognised method names are: 'no_balancing';
+        'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
+        - resampling_method_2: Name of the method used to resample the data in
+        the classifier 2 pipeline. Recognised method names are: 'no_balancing';
+        'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
+        - n_components_pca_1: The number of components to transform the data to
+        after fitting the data with PCA for classifier 1. If set to None, PCA
+        will not be included in the pipeline.
+        - n_components_pca_2: The number of components to transform the data to
+        after fitting the data with PCA for classifier 2. If set to None, PCA
+        will not be included in the pipeline.
+        - scoring_metric: Name of the scoring metric used to measure the
+        performance of the fitted classifier. Metric must be a string and be one
+        of the scoring metrics for classifiers listed at
+        https://scikit-learn.org/stable/modules/model_evaluation.html#scoring-parameter).
+        - test: Boolean describing whether the function is being run during the
+        program's unit tests - by default is set to False
+
+        Output
+        ----------
+        - F: F statistic output from paired t-test
+        - p: p value output from paired t-test
         """
 
-        from mlxtend.evaluate import combined_ftest_5x2cv
+        # Checks argument values are suitable to run the function. Arguments of
+        # "check_arguments" that are not specified for
+        # "run_5x2_CV_paired_t_test" are set to values that will pass the checks
+        check_arguments(
+            func_name='run_5x2_CV_paired_t_test', x_train=x, y_train=y,
+            train_groups=None, x_test=np.array([]), y_test=np.array([]),
+            selected_features=selected_features_1,
+            splits=create_generator(x.shape[0]),
+            resampling_method=resampling_method_1,
+            n_components_pca=n_components_pca_1, run='randomsearch',
+            fixed_params=params_1, tuned_params={},
+            train_scoring_metric=scoring_metric,
+            test_scoring_funcs={}, n_iter=None,
+            cv_folds_inner_loop=5, cv_folds_outer_loop='loocv',
+            draw_conf_mat=True, plt_name=''
+        )
+        check_arguments(
+            func_name='run_5x2_CV_paired_t_test', x_train=x, y_train=y,
+            train_groups=None, x_test=np.array([]), y_test=np.array([]),
+            selected_features=selected_features_2,
+            splits=create_generator(x.shape[0]),
+            resampling_method=resampling_method_2,
+            n_components_pca=n_components_pca_2, run='randomsearch',
+            fixed_params=params_2, tuned_params={},
+            train_scoring_metric=scoring_metric,
+            test_scoring_funcs={}, n_iter=None,
+            cv_folds_inner_loop=5, cv_folds_outer_loop='loocv',
+            draw_conf_mat=True, plt_name=''
+        )
 
         clf_1 = classifier_1(**params_1)
         trained_clf_1 = self.train_model(
-            x, y, groups, selected_features_1, clf_1, resampling_method_1,
-            n_components_pca_1, scoring_func
+            x, y, selected_features_1, clf_1, resampling_method_1,
+            n_components_pca_1, scoring_metric, test
         )
         clf_2 = classifier_2(**params_2)
         trained_clf_2 = self.train_model(
-            x, y, groups, selected_features_2, clf_2, resampling_method_2,
-            n_components_pca_2, scoring_func
+            x, y, selected_features_2, clf_2, resampling_method_2,
+            n_components_pca_2, scoring_metric, test
         )
 
         F, p = combined_ftest_5x2cv(
