@@ -223,7 +223,8 @@ def check_arguments(
     func_name, x_train, y_train, train_groups, x_test, y_test,
     selected_features, splits, resampling_method, n_components_pca, run,
     fixed_params, tuned_params, train_scoring_metric, test_scoring_funcs,
-    n_iter, cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name
+    n_iter, cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+    test=False
 ):
     """
     Tests whether the input arguments are of the expected type (and where
@@ -274,6 +275,8 @@ def check_arguments(
     - draw_conf_mat: Boolean, dictates whether to plot confusion matrices to
     compare the model predictions to the test data.
     - plt_name: Prefix to append to name of the saved plot(s)
+    - test: Boolean describing whether the function is being run during the
+    program's unit tests - by default is set to False
     """
 
     # Tests that input data is provided as numpy arrays and that their
@@ -295,11 +298,11 @@ def check_arguments(
         )
     else:
         if y_train.size > 0:
-            y_train_cols = y_train.shape[1]
-            if y_train_cols != 1:
+            try:
+                y_train.shape[1]
                 raise ValueError('Expect "y_train" to be a 1D array')
-        else:
-            y_train_cols = 0
+            except IndexError:
+                pass
 
     if x_train.shape[0] != y_train.shape[0]:
         raise ValueError(
@@ -312,6 +315,13 @@ def check_arguments(
                 'Expect "train_groups" to be a numpy array of training data '
                 'subclass labels'
             )
+        else:
+            if train_groups.size > 0:
+                try:
+                    train_groups.shape[1]
+                    raise ValueError('Expect "train_groups" to be a 1D array')
+                except IndexError:
+                    pass
         if x_train.shape[0] != train_groups.shape[0]:
             raise ValueError(
                 'Different number of entries (rows) in "x_train" and '
@@ -335,31 +345,49 @@ def check_arguments(
         )
     else:
         if y_test.size > 0:
-            y_test_cols = y_test.shape[1]
-            if y_test.shape[1] != 1:
+            try:
+                y_test.shape[1]
                 raise ValueError('Expect "y_test" to be a 1D array')
-        else:
-            y_test_cols = 0
+            except IndexError:
+                pass
 
     if x_test.shape[0] != y_test.shape[0]:
         raise ValueError(
             'Different number of entries (rows) in "x_test" and "y_test"'
         )
 
-    if x_train_cols != x_test_cols:
-        raise ValueError(
-            'Different number of features incorporated in the training and '
-            'test data'
-        )
+    if x_train_cols != 0 and x_test_cols != 0:
+        if x_train_cols != x_test_cols:
+            raise ValueError(
+                'Different number of features incorporated in the training and '
+                'test data'
+            )
 
     if pd.DataFrame(x_train).isna().any(axis=None):
         raise ValueError('NaN value(s) detected in "x_train" data')
     if pd.DataFrame(y_train).isna().any(axis=None):
         raise ValueError('NaN value(s) detected in "y_train" data')
+    if pd.DataFrame(train_groups).isna().any(axis=None):
+        raise ValueError('NaN value(s) detected in "train_groups" data')
     if pd.DataFrame(x_test).isna().any(axis=None):
         raise ValueError('NaN value(s) detected in "x_test" data')
     if pd.DataFrame(y_test).isna().any(axis=None):
         raise ValueError('NaN value(s) detected in "y_test" data')
+
+    if pd.DataFrame(x_train).applymap(
+        lambda x: isinstance(x, (int, float))).all(axis=None, skipna=False
+    ) is np.bool_(False):
+        raise ValueError(
+            'Non-numeric value(s) in "x_train" - expect all values in "x_train"'
+            ' to be integers / floats'
+        )
+    if pd.DataFrame(x_test).applymap(
+        lambda x: isinstance(x, (int, float))).all(axis=None, skipna=False
+    ) is np.bool_(False):
+        raise ValueError(
+            'Non-numeric value(s) in "x_test" - expect all values in "x_test"'
+            ' to be integers / floats'
+        )
 
     # Tests arguments controlling the analysis of the input data
     if type(selected_features) != list:
@@ -368,31 +396,32 @@ def check_arguments(
             'the analysis'
         )
     else:
-        if len(selected_features) > x_train_cols:
-            raise ValueError(
-                'There is a greater number of features listed in '
-                '"selected_features" than there are columns in the '
-                '"x_train" input arrays'
-            )
-        if len(selected_features) > x_test_cols:
-            raise ValueError(
-                'There is a greater number of features listed in '
-                '"selected_features" than there are columns in the "x_test"'
-                ' input arrays'
-            )
+        if x_train_cols != 0:
+            if len(selected_features) > x_train_cols:
+                raise ValueError(
+                    'There is a greater number of features listed in '
+                    '"selected_features" than there are columns in the '
+                    '"x_train" input arrays'
+                )
+        if x_test_cols != 0:
+            if len(selected_features) > x_test_cols:
+                raise ValueError(
+                    'There is a greater number of features listed in '
+                    '"selected_features" than there are columns in the '
+                    '"x_test" input arrays'
+                )
 
     if type(splits) != GeneratorType:
         raise TypeError(
-            'Expect "splits" to be a generator that creates train test splits '
-            'for the input "x_train" array'
+            'Expect "splits" to be a generator that creates train test splits'
         )
     else:
-        copy_splits = copy.deepcopy(splits)
+        copy_splits = copy.deepcopy(list(splits))
         for split in list(copy_splits):
             if (split[0].shape[0] + split[1].shape[0]) != x_train.shape[0]:
                 raise ValueError(
                     'Size of train test splits generated by "splits" does not '
-                    'match the size of the input array "x_train"'
+                    'match the number of rows in the input array "x_train"'
                 )
 
     exp_resampling_methods = [
@@ -408,16 +437,25 @@ def check_arguments(
         if type(n_components_pca) != int:
             raise TypeError(
                 'Expect "n_components_pca" to be set either to None or to a '
-                'positive integer value between 1 and the number of features '
-                'included in "x_train"'
+                'positive integer value between 1 and the number of features'
             )
         else:
-            if n_components_pca < 1 or n_components_pca > x_train_cols:
-                raise ValueError(
-                    'Expect "n_components_pca" to be set either to None or to '
-                    'a positive integer value between 1 and the number of '
-                    'features included in "x_train"'
-                )
+            print(x_train_cols)
+            print(x_test_cols)
+            if x_train_cols > 0:
+                if n_components_pca < 1 or n_components_pca > x_train_cols:
+                    raise ValueError(
+                        'Expect "n_components_pca" to be set either to None or to '
+                        'a positive integer value between 1 and the number of '
+                        'features'
+                    )
+            else:
+                if n_components_pca < 1 or n_components_pca > x_test_cols:
+                    raise ValueError(
+                        'Expect "n_components_pca" to be set either to None or to '
+                        'a positive integer value between 1 and the number of '
+                        'features'
+                    )
 
     if func_name == 'run_ml':
         if not run in ['randomsearch', 'gridsearch', 'train']:
@@ -460,7 +498,7 @@ def check_arguments(
             '"train_scoring_metric" not recogised - please specify a string '
             'corresponding to the name of the metric you would like to use in '
             'the sklearn.metrics module, e.g. "accuracy".\nExpect metric to be '
-            'in the following list:\n'.format(exp_train_score_metrics)
+            'in the following list:\n{}'.format(exp_train_score_metrics)
         )
 
     exp_test_scoring_funcs = [
@@ -472,7 +510,10 @@ def check_arguments(
             raise ValueError(
                 'Scoring function {} not recognised.\nExpect scoring functions '
                 'to be in the following list:\n'
-                '{}'.format(scoring_func, exp_scoring_funcs)
+                '{}'.format(
+                    scoring_func.__name__,
+                    [scoring_func.__name__ for scoring_func in exp_test_scoring_funcs]
+                )
             )
 
     if not n_iter is None:
@@ -528,6 +569,9 @@ def check_arguments(
         raise TypeError(
             'Expect "plt_name" to be a string'
         )
+
+    if test is True:
+        return 'All checks passed'
 
 
 class ManualFeatureSelection(BaseEstimator, TransformerMixin):
@@ -2068,7 +2112,7 @@ class RunML(DefData):
         if splits is None:
             check_splits = create_generator(x_train.shape[0])
         else:
-            check_splits = copy.deepcopy(splits)
+            check_splits = copy.deepcopy(list(splits))
         check_arguments(
             func_name='run_ml', x_train=x_train, y_train=y_train,
             train_groups=train_groups, x_test=x_test, y_test=y_test,

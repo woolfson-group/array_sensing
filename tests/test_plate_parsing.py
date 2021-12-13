@@ -82,11 +82,24 @@ class TestClass(unittest.TestCase):
             input_df = exp_input_dict[num]
             exp_df = exp_results_dict[num]
 
-            if num in range(1, 8):
+            if num in [1, 2, 3, 4, 5, 6, 7]:
                 act_df = trim_dataframe(input_df, '')
                 pd.testing.assert_frame_equal(exp_df, act_df)
-            elif num in range(8, 11):
-                with self.assertRaises(PlateLayoutError): trim_dataframe(input_df, '')
+            elif num == 8:
+                with self.assertRaises(PlateLayoutError) as message: trim_dataframe(
+                    input_df, ''
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Empty dataframe passed to trim_dataframe from '
+                )
+            elif num in [9, 10]:
+                with self.assertRaises(PlateLayoutError) as message: trim_dataframe(
+                    input_df, ''
+                )
+                self.assertEqual(
+                    str(message.exception), 'Failed to parse  metadata'
+                )
 
     def test_parse_xlsx_to_dataframe(self):
         """
@@ -268,20 +281,95 @@ class TestClass(unittest.TestCase):
             exp_peptide_list = exp_results_dict[num][2]
 
             if num in [2, 3]:
-                with self.assertRaises(TypeError): parse_xlsx_to_dataframe(
+                with self.assertRaises(TypeError) as message: parse_xlsx_to_dataframe(
                     plate_path, split_name, peptide_dict, gain
                 )
-            elif num in [5]:
-                with self.assertRaises(FileNotFoundError): parse_xlsx_to_dataframe(
+                self.assertEqual(
+                    str(message.exception),
+                    'Gain value not recognised. Please specify a positive integer'
+                )
+            elif num == 4:
+                with self.assertRaises(ValueError) as message: parse_xlsx_to_dataframe(
                     plate_path, split_name, peptide_dict, gain
                 )
-            elif num in [4, 6, 7, 8, 9, 10, 17]:
-                with self.assertRaises(ValueError): parse_xlsx_to_dataframe(
+                self.assertEqual(
+                    str(message.exception),
+                    'Gain value not recognised. Please specify a positive integer'
+                )
+            elif num == 5:
+                with self.assertRaises(FileNotFoundError) as message: parse_xlsx_to_dataframe(
                     plate_path, split_name, peptide_dict, gain
                 )
-            elif num in [11, 12, 13, 14]:
-                with self.assertRaises(PlateLayoutError): parse_xlsx_to_dataframe(
+                self.assertEqual(
+                    str(message.exception),
+                    'File tests/Test_plates/Test_plate_5.xlsx doesn\'t exist'
+                )
+            elif num == 6:
+                with self.assertRaises(ValueError) as message: parse_xlsx_to_dataframe(
+                    plate_path, split_name, peptide_dict, gain
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    '"Protocol Information" sheet not found in tests/Test_plates/Test_plate_6.xlsx'
+                )
+            elif num == 7:
+                with self.assertRaises(ValueError) as message: parse_xlsx_to_dataframe(
+                    plate_path, split_name, peptide_dict, gain
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    '"Plate Layout" information not found on Protocol Information sheet'
+                )
+            elif num == 8:
+                with self.assertRaises(ValueError) as message: parse_xlsx_to_dataframe(
+                    plate_path, split_name, peptide_dict, gain
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    '"Peptide Layout" information not found on Protocol Information sheet'
+                )
+            elif num == 9:
+                with self.assertRaises(ValueError) as message: parse_xlsx_to_dataframe(
+                    plate_path, split_name, peptide_dict, gain
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    '"End point" sheet not found in tests/Test_plates/Test_plate_9.xlsx'
+                )
+            elif num == 10:
+                with self.assertRaises(ValueError) as message: parse_xlsx_to_dataframe(
+                    plate_path, split_name, peptide_dict, gain
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Failed to locate plate in tests/Test_plates/Test_plate_10.xlsx\n'
+                    '- expect to be marked as e.g. "1.rawdata"'
+                )
+            elif num in [11, 12, 14]:
+                with self.assertRaises(PlateLayoutError) as message: parse_xlsx_to_dataframe(
                     plate_path, split_name, peptide_dict, gain=1
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Peptides tested in tests/Test_plates/Test_plate_{}.xlsx '
+                    'don\'t match peptides specified by user'.format(num)
+                )
+            elif num == 13:
+                with self.assertRaises(PlateLayoutError) as message: parse_xlsx_to_dataframe(
+                    plate_path, split_name, peptide_dict, gain=1
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Peptide(s)\n[\'Peptide 3\']\nlisted more than once in '
+                    'plate layout from tests/Test_plates/Test_plate_13.xlsx'
+                )
+            elif num == 17:
+                with self.assertRaises(ValueError) as message: parse_xlsx_to_dataframe(
+                    plate_path, split_name, peptide_dict, gain
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'NaN value detected in tests/Test_plates/Test_plate_17.xlsx'
                 )
             else:
                 (
@@ -406,9 +494,48 @@ class TestClass(unittest.TestCase):
 
             os.mkdir('tests/Temp_output')
 
-            if num in [3, 4, 5, 6, 7]:
-                with self.assertRaises(ValueError): draw_scatter_plot(
+            if num == 3:
+                with self.assertRaises(ValueError) as message: draw_scatter_plot(
                     test_data, 'tests/Temp_output', features, analytes, str(num), True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'List of peptides to include in the plot is empty'
+                )
+            elif num == 4:
+                with self.assertRaises(ValueError) as message: draw_scatter_plot(
+                    test_data, 'tests/Temp_output', features, analytes, str(num), True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'List of analytes to include in the plot is empty'
+                )
+            elif num == 5:
+                with self.assertRaises(ValueError) as message: draw_scatter_plot(
+                    test_data, 'tests/Temp_output', features, analytes, str(num), True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Failed to parse the input dataframes - check that '
+                    '"features" and "analytes" lists match the features and '
+                    'analytes analysed in one or more of the dataframes in '
+                    '"grouped_fluor_data"'
+                )
+            elif num == 6:
+                with self.assertRaises(ValueError) as message: draw_scatter_plot(
+                    test_data, 'tests/Temp_output', features, analytes, str(num), True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Analyte Analyte 4 not present in the input data for 6'
+                )
+            elif num == 7:
+                with self.assertRaises(ValueError) as message: draw_scatter_plot(
+                    test_data, 'tests/Temp_output', features, analytes, str(num), True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Non-numeric value found in input dataframe for 7'
                 )
             else:
                 draw_scatter_plot(
@@ -511,8 +638,17 @@ class TestClass(unittest.TestCase):
                                       '2': [2, 2]})}
 
         for num, df in input_dfs.items():
-            if num in [1, 2, 7]:
-                with self.assertRaises(ValueError): highlight_outliers(df, False)
+            if num == 1:
+                with self.assertRaises(ValueError) as message: highlight_outliers(df, False)
+                self.assertEqual(
+                    str(message.exception), 'Empty dataframe:\n{}'.format(df)
+                )
+
+            elif num == 2:
+                with self.assertRaises(ValueError) as message: highlight_outliers(df, False)
+                self.assertEqual(
+                    str(message.exception), 'All values for 2 are NaN:\n{}'.format(df)
+                )
 
             elif num == 3:
                 # Default parameters, don't update input dataframe
@@ -703,6 +839,12 @@ class TestClass(unittest.TestCase):
                 pd.testing.assert_frame_equal(exp_df, act_df)
                 self.assertEqual(exp_outliers, act_outliers)
 
+            elif num == 7:
+                with self.assertRaises(ValueError) as message: highlight_outliers(df, False)
+                self.assertEqual(
+                    str(message.exception), 'No \'Analyte\' column in input dataframe'
+                )
+
     def test_calc_median(self):
         """
         Tests calc_median in parse_array_data.py
@@ -731,7 +873,12 @@ class TestClass(unittest.TestCase):
                                        '3': [np.nan]})
                 pd.testing.assert_frame_equal(act_df, exp_df)
 
-                with self.assertRaises(NaNFluorescenceError): calc_median(df, True)
+                with self.assertRaises(NaNFluorescenceError) as message: calc_median(df, True)
+                self.assertEqual(
+                    str(message.exception),
+                    '\x1b[31m ERROR - median reading/s for [\'3\'] is/are '
+                    'calculated to be NaN. \033[0m'
+                )
 
     def test_scale_min_max(self):
         """
@@ -810,7 +957,7 @@ class TestClass(unittest.TestCase):
                                                         'Plate': ['', '', '']})}),
                 'fluorophore', {'Split 1': 'Peptide 1', 'Split N': 'Peptide N'}, 'Split 1', [], [], 0.05, 1, 3, True],
             # Test min max scaling divide by zero error
-            5: [OrderedDict({'blank': pd.DataFrame({'Split 1_Peptide 1': [1.3, 5.3, 180],
+            5: [OrderedDict({'blank': pd.DataFrame({'Split 1_Peptide 1': [0.7, 3.3, 180],
                                                     'Split 1_Peptide 2': [3.3, 3.0, 3.4],
                                                     'Split 1_Peptide 3': [9.3, 9.2, 12.0],
                                                     'Analyte': ['blank', 'blank', 'blank'],
@@ -991,23 +1138,84 @@ class TestClass(unittest.TestCase):
             exp_plate_outliers = exp_results_dict[num][1]
             exp_peptide_list = exp_results_dict[num][2]
 
-            if num in [4, 10, 11]:
-                with self.assertRaises(ValueError): scale_min_max(
+            if num == 4:
+                with self.assertRaises(ValueError) as message: scale_min_max(
                     scale_method, plate, '', no_pep, split_name,
                     cols_ignore, plate_outliers, alpha_generalised_esd,
                     drop_thresh, k_max, test
                 )
-            elif num in [5, 6]:
-                with self.assertRaises(MinMaxFluorescenceError): scale_min_max(
+                self.assertEqual(
+                    str(message.exception),
+                    'Median fluorescence of (Analyte 1 + Split 1_Peptide 3 + '
+                    'fluorophore) is less than fluorescence of '
+                    '(Analyte 1 + Split 1_Peptide 1 + fluorophore) alone on '
+                    'plate '
+                )
+            elif num == 5:
+                with self.assertRaises(MinMaxFluorescenceError) as message: scale_min_max(
                     scale_method, plate, '', no_pep, split_name,
                     cols_ignore, plate_outliers, alpha_generalised_esd,
                     drop_thresh, k_max, test
                 )
-            elif num in [7, 8]:
-                with self.assertRaises(PlateLayoutError): scale_min_max(
+                self.assertEqual(
+                    str(message.exception),
+                    'Min and max fluorescence readings for peptide '
+                    'Split 1_Peptide 2 on plate  are the same'
+                )
+            elif num == 6:
+                with self.assertRaises(MinMaxFluorescenceError) as message: scale_min_max(
                     scale_method, plate, '', no_pep, split_name,
                     cols_ignore, plate_outliers, alpha_generalised_esd,
                     drop_thresh, k_max, test
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Median max. fluorescence reading for peptide '
+                    'Split 1_Peptide 2 on plate  is smaller than the '
+                    'corresponding median min. fluorescence reading'
+                )
+            elif num == 7:
+                with self.assertRaises(PlateLayoutError) as message: scale_min_max(
+                    scale_method, plate, '', no_pep, split_name,
+                    cols_ignore, plate_outliers, alpha_generalised_esd,
+                    drop_thresh, k_max, test
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'No blank readings (= peptide + fluorophore without '
+                    'analyte) included on plate'
+                )
+            elif num == 8:
+                with self.assertRaises(PlateLayoutError) as message: scale_min_max(
+                    scale_method, plate, '', no_pep, split_name,
+                    cols_ignore, plate_outliers, alpha_generalised_esd,
+                    drop_thresh, k_max, test
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'No reading for Split 1_Peptide 4 for analyte Analyte 2 on '
+                    'plate .\nNo peptide blank is required for min max scaling'
+                )
+            elif num == 10:
+                with self.assertRaises(ValueError) as message: scale_min_max(
+                    scale_method, plate, '', no_pep, split_name,
+                    cols_ignore, plate_outliers, alpha_generalised_esd,
+                    drop_thresh, k_max, test
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'NaN reading on plate  for Analyte 2 readings'
+                )
+            elif num == 11:
+                with self.assertRaises(ValueError) as message: scale_min_max(
+                    scale_method, plate, '', no_pep, split_name,
+                    cols_ignore, plate_outliers, alpha_generalised_esd,
+                    drop_thresh, k_max, test
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Expect argument "scale_method" to be set to either '
+                    '"fluorophore" or "analyte_fluorophore", not X'
                 )
             else:
                 (
@@ -1085,25 +1293,25 @@ class TestClass(unittest.TestCase):
             9: [pd.DataFrame({'Peptide 1': [1.0, 2.0, 4.0],
                               'Peptide 2': [3.0, 0.5, 0.6],
                               'Peptide 3': [1.7, 1.2, 3.0]}),
-                1.0, 1.0, None],
+                True, 1.0, None],
             # Test for detecting NaN values in dataframe
             10: [pd.DataFrame({'Peptide 1': [1.0, 2.0, 4.0],
                                'Peptide 2': [3.0, 0.5, 0.6],
                                'Peptide 3': [np.nan, 1.2, 3.0],
                                'Analyte': ['A', 'C', 'B']}),
-                1.0, 1.0, None],
+                True, 1.0, None],
             # Test for detecting infinite values in dataframe
             11: [pd.DataFrame({'Peptide 1': [1.0, 2.0, 4.0],
                                'Peptide 2': [3.0, np.inf, 0.6],
                                'Peptide 3': [1.7, 1.2, 3.0],
                                'Analyte': ['A', 'C', 'B']}),
-                1.0, 1.0, None],
+                True, 1.0, None],
             # Test for detecting non-numeric values in dataframe
             12: [pd.DataFrame({'Peptide 1': [1.0, 2.0, 4.0],
                                'Peptide 2': ['X', 0.5, 0.6],
                                'Peptide 3': [1.7, 1.2, 3.0],
                                'Analyte': ['A', 'C', 'B']}),
-                1.0, 1.0, None]
+                True, 1.0, None]
         }
         exp_results_dict = {
             1: OrderedDict({'All_data': OrderedDict({'Original_data': pd.DataFrame({'Peptide 1': [1.0, 2.0, 4.0],
@@ -1146,26 +1354,113 @@ class TestClass(unittest.TestCase):
             class_order = exp_input_dict[num][3]
             exp_results = exp_results_dict[num]
 
-            if num in [3]:
-                with self.assertRaises(FileNotFoundError): draw_boxplots(
+            if num == 3:
+                with self.assertRaises(FileNotFoundError) as message: draw_boxplots(
                     test_df, 'tests/Temp_output', scale, cushion, class_order, '', True
                 )
-            elif num in [4]:
+                self.assertEqual(
+                    str(message.exception),
+                    'Directory tests/Temp_output does not exist'
+                )
+            elif num == 4:
                 os.makedirs('tests/Temp_output/Boxplots')
-                with self.assertRaises(FileExistsError): draw_boxplots(
+                with self.assertRaises(FileExistsError) as message: draw_boxplots(
                     test_df, 'tests/Temp_output', scale, cushion, class_order, '', True
                 )
-                shutil.rmtree('tests/Temp_output')
-            elif num in [5, 6, 7, 8, 10, 11, 12]:
-                os.mkdir('tests/Temp_output')
-                with self.assertRaises(ValueError): draw_boxplots(
-                    test_df, 'tests/Temp_output', scale, cushion, class_order, '', True
+                self.assertEqual(
+                    str(message.exception),
+                    'Directory tests/Temp_output/Boxplots exists - please '
+                    'rename this directory if you wish to run this function to '
+                    'avoid overwriting the original directory'
                 )
                 shutil.rmtree('tests/Temp_output')
-            elif num in [9]:
+            elif num == 5:
                 os.mkdir('tests/Temp_output')
-                with self.assertRaises(KeyError): draw_boxplots(
+                with self.assertRaises(ValueError) as message: draw_boxplots(
                     test_df, 'tests/Temp_output', scale, cushion, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Expect class_order to be a list of analytes including '
+                    'every analyte in the dataset once. Instead is set to:\n'
+                    '[\'B\', \'C\', \'D\']'
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 6:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(ValueError) as message: draw_boxplots(
+                    test_df, 'tests/Temp_output', scale, cushion, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Expect class_order to be a list of analytes including '
+                    'every analyte in the dataset once. Instead is set to:\n'
+                    '[\'B\', \'C\', \'B\']'
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 7:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(ValueError) as message: draw_boxplots(
+                    test_df, 'tests/Temp_output', scale, cushion, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Unexpected value for cushion: X\nExpect an integer or a '
+                    'float.'
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 8:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(ValueError) as message: draw_boxplots(
+                    test_df, 'tests/Temp_output', scale, cushion, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Expect Boolean (True/False) input for whether or not to '
+                    'scale the data, instead have 1.0, type <class \'float\'>'
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 9:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(KeyError) as message: draw_boxplots(
+                    test_df, 'tests/Temp_output', scale, cushion, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    '\'No "Analyte" column in input dataframe\''  # KeyError quirk
+                    # means outer quotation marks are included for str(message.exception)
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 10:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(ValueError) as message: draw_boxplots(
+                    test_df, 'tests/Temp_output', scale, cushion, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'NaN reading(s) found in input dataframe:\n{}'.format(test_df)
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 11:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(ValueError) as message: draw_boxplots(
+                    test_df, 'tests/Temp_output', scale, cushion, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Infinite reading(s) found in input dataframe:\n{}'.format(test_df)
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 12:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(ValueError) as message: draw_boxplots(
+                    test_df, 'tests/Temp_output', scale, cushion, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Non-numeric value in input dataframe - expect all values '
+                    'in input dataframe to be integers / floats:\n'
+                    '{}'.format(test_df.drop('Analyte', axis=1))
                 )
                 shutil.rmtree('tests/Temp_output')
             else:
@@ -1250,25 +1545,25 @@ class TestClass(unittest.TestCase):
             8: [pd.DataFrame({'Peptide 1': [1.0, 2.0, 4.0],
                               'Peptide 2': [3.0, 0.5, 0.6],
                               'Peptide 3': [1.7, 1.2, 3.0]}),
-                1.0, 1.0, None],
+                True, None],
             # Test for detecting NaN values in dataframe
             9: [pd.DataFrame({'Peptide 1': [1.0, 2.0, 4.0],
                               'Peptide 2': [3.0, 0.5, 0.6],
                               'Peptide 3': [np.nan, 1.2, 3.0],
                               'Analyte': ['A', 'C', 'B']}),
-                1.0, 1.0, None],
+                True, None],
             # Test for detecting infinite values in dataframe
             10: [pd.DataFrame({'Peptide 1': [1.0, 2.0, 4.0],
                                'Peptide 2': [3.0, np.inf, 0.6],
                                'Peptide 3': [1.7, 1.2, 3.0],
                                'Analyte': ['A', 'C', 'B']}),
-                1.0, 1.0, None],
+                True, None],
             # Test for detecting non-numeric values in dataframe
             11: [pd.DataFrame({'Peptide 1': [1.0, 2.0, 4.0],
                                'Peptide 2': ['X', 0.5, 0.6],
                                'Peptide 3': [1.7, 1.2, 3.0],
                                'Analyte': ['A', 'C', 'B']}),
-                1.0, 1.0, None]
+                True, None]
         }
 
         exp_results_dict = {
@@ -1313,26 +1608,102 @@ class TestClass(unittest.TestCase):
             class_order = exp_input_dict[num][2]
             exp_results = exp_results_dict[num]
 
-            if num in [3]:
-                with self.assertRaises(FileNotFoundError): draw_heatmap_fingerprints(
+            if num == 3:
+                with self.assertRaises(FileNotFoundError) as message: draw_heatmap_fingerprints(
                     test_df, 'tests/Temp_output', scale, class_order, '', True
                 )
-            elif num in [4]:
+                self.assertEqual(
+                    str(message.exception),
+                    'Directory tests/Temp_output does not exist'
+                )
+            elif num == 4:
                 os.makedirs('tests/Temp_output/Heatmap_plots')
-                with self.assertRaises(FileExistsError): draw_heatmap_fingerprints(
+                with self.assertRaises(FileExistsError) as message: draw_heatmap_fingerprints(
                     test_df, 'tests/Temp_output', scale, class_order, '', True
                 )
-                shutil.rmtree('tests/Temp_output')
-            elif num in [5, 6, 7, 9, 10, 11]:
-                os.mkdir('tests/Temp_output')
-                with self.assertRaises(ValueError): draw_heatmap_fingerprints(
-                    test_df, 'tests/Temp_output', scale, class_order, '', True
+                self.assertEqual(
+                    str(message.exception),
+                    'Directory tests/Temp_output/Heatmap_plots exists - please '
+                    'rename this directory if you wish to run this function to '
+                    'avoid overwriting the original directory'
                 )
                 shutil.rmtree('tests/Temp_output')
-            elif num in [8]:
+            elif num == 5:
                 os.mkdir('tests/Temp_output')
-                with self.assertRaises(KeyError): draw_heatmap_fingerprints(
+                with self.assertRaises(ValueError) as message: draw_heatmap_fingerprints(
                     test_df, 'tests/Temp_output', scale, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Expect class_order to be a list of analytes including '
+                    'every analyte in the dataset once. Instead is set to:\n'
+                    '[\'B\', \'C\', \'D\']'
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 6:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(ValueError) as message: draw_heatmap_fingerprints(
+                    test_df, 'tests/Temp_output', scale, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Expect class_order to be a list of analytes including '
+                    'every analyte in the dataset once. Instead is set to:\n'
+                    '[\'B\', \'C\', \'B\']'
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 7:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(ValueError) as message: draw_heatmap_fingerprints(
+                    test_df, 'tests/Temp_output', scale, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Expect Boolean (True/False) input for whether or not to '
+                    'scale the data, instead have 1.0, type <class \'float\'>'
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 8:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(KeyError) as message: draw_heatmap_fingerprints(
+                    test_df, 'tests/Temp_output', scale, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    '\'No "Analyte" column in input dataframe\''  # KeyError quirk
+                    # means outer quotation marks are included for str(message.exception)
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 9:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(ValueError) as message: draw_heatmap_fingerprints(
+                    test_df, 'tests/Temp_output', scale, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'NaN reading(s) found in input dataframe:\n{}'.format(test_df)
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 10:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(ValueError) as message: draw_heatmap_fingerprints(
+                    test_df, 'tests/Temp_output', scale, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Infinite reading(s) found in input dataframe:\n'.format(test_df)
+                )
+                shutil.rmtree('tests/Temp_output')
+            elif num == 11:
+                os.mkdir('tests/Temp_output')
+                with self.assertRaises(ValueError) as message: draw_heatmap_fingerprints(
+                    test_df, 'tests/Temp_output', scale, class_order, '', True
+                )
+                self.assertEqual(
+                    str(message.exception),
+                    'Non-numeric value in input dataframe - expect all values '
+                    'in input dataframe to be integers / floats:\n'
+                    '{}'.format(test_df.drop('Analyte', axis=1))
                 )
                 shutil.rmtree('tests/Temp_output')
             else:

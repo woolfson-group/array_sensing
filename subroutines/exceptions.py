@@ -1,5 +1,7 @@
 
 
+import numpy as np
+
 
 class PlateLayoutError(Exception):
     pass
@@ -21,4 +23,4 @@ class AlgorithmError(Exception):
     pass
 
 def create_generator(n):
-    yield(['' for n in range(n)], []) 
+    yield(np.array([np.nan for n in range(n)]), np.array([]))

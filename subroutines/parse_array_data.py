@@ -362,7 +362,14 @@ def draw_scatter_plot(
                 ).reset_index(drop=True)
                 plot_data[analyte] = analyte_df
             except KeyError:
-                pass
+                pass  # If more than one split, will be some dataframes with
+                # columns not in [features] list
+    if plot_data == OrderedDict():
+        raise ValueError(
+            'Failed to parse the input dataframes - check that "features" and '
+            '"analytes" lists match the features and analytes analysed in one '
+            'or more of the dataframes in "grouped_fluor_data"'
+        )
     plot_df = pd.concat(plot_data.values(), axis=0).reset_index(drop=True)
     plot_df = pd.melt(
         plot_df, id_vars='Analyte', var_name='Peptide', value_name='Reading'
@@ -374,6 +381,10 @@ def draw_scatter_plot(
         raise ValueError(
             'Non-numeric value found in input dataframe for {}'.format(repeat_id)
         )
+    # The error below shouldn't ever be raised as only dataframes whose columns
+    # match [features] are incorporated into plot_df, but have left this check
+    # in place in case the code above changes to ensure that this check is
+    # performed at some stage in the function
     for feature in features:
         if not feature in plot_df['Peptide'].tolist():
             raise ValueError(
@@ -770,16 +781,18 @@ def scale_min_max(
                 else:
                     if test is True:
                         raise ValueError(
-                            'Median fluorescence of ({} + {} + DPH) is less '
-                            'than fluorescence of ({} + DPH) alone on plate '
-                            '{}'.format(analyte, peptide, analyte, plate_name)
+                            'Median fluorescence of ({} + {} + fluorophore) is '
+                            'less than fluorescence of ({} + {} + fluorophore) '
+                            'alone on plate {}'.format(
+                                analyte, peptide, analyte, no_pep_str, plate_name
+                            )
                         )
                     else:
                         print('\x1b[31m WARNING - median fluorescence of ({} + '
-                              '{} + DPH) is less than fluorescence of ({} + '
-                              'DPH) alone on plate {}. Analysis will continue '
-                              'but please CHECK YOUR DATA.\033'
-                              '[0m'.format(analyte, peptide, analyte, plate_name))
+                              '{} + fluorophore) is less than fluorescence of '
+                              '({} + fluorophore) alone on plate {}. Analysis '
+                              'will continue but please CHECK YOUR DATA. \033[0m'
+                              ''.format(analyte, peptide, analyte, plate_name))
 
         # Performs min max scaling for each feature
         for index_c, peptide in enumerate(list(fluor_data.columns)):
@@ -803,18 +816,19 @@ def scale_min_max(
                         scaled_val = np.nan
                         if max_fluor == min_fluor_demoninator:
                             raise MinMaxFluorescenceError(
-                                '\x1b[31m Min and max fluorescence '
-                                'readings for peptide {} on plate {} are the '
-                                'same \033[0m'.format(
-                                peptide, fluor_data['Plate'][index_r])
+                                'Min and max fluorescence readings for peptide '
+                                '{} on plate {} are the same'.format(
+                                    peptide, fluor_data['Plate'][index_r]
+                                )
                             )
                         elif max_fluor < min_fluor_demoninator:
                             raise MinMaxFluorescenceError(
-                                '\x1b[31m Median max. fluorescence'
-                                ' reading for peptide {} on plate {} is '
-                                'smaller than the corresponding median min. '
-                                'fluorescence reading \033[0m'.format(
-                                peptide, fluor_data['Plate'][index_r])
+                                'Median max. fluorescence reading for peptide '
+                                '{} on plate {} is smaller than the '
+                                'corresponding median min. fluorescence '
+                                'reading'.format(
+                                    peptide, fluor_data['Plate'][index_r]
+                                )
                             )
                     fluor_data.iloc[index_r, index_c] = scaled_val
 
@@ -869,19 +883,20 @@ def draw_heatmap_fingerprints(
         )
     if os.path.isdir('{}/Heatmap_plots'.format(results_dir)):
         raise FileExistsError(
-            'Directory {} exists - please rename this directory if you wish to '
-            'run this function to avoid overwriting the original '
+            'Directory {}/Heatmap_plots exists - please rename this directory if'
+            ' you wish to run this function to avoid overwriting the original '
             'directory'.format(results_dir)
         )
     os.mkdir('{}/Heatmap_plots'.format(results_dir))
 
     if not 'Analyte' in fluor_df.columns:
-        raise KeyError('No \'Analyte\' column in input dataframe')
+        raise KeyError(
+            'No "Analyte" column in input dataframe'
+        )
 
     classes = sorted([analyte for analyte in set(fluor_df['Analyte'].tolist())])
     if not class_order is None:
         try:
-            class_order = sorted(class_order)
             if classes != sorted(class_order):
                 raise ValueError(
                     'Expect class_order to be a list of analytes including every '
@@ -1021,19 +1036,20 @@ def draw_boxplots(
 
     if os.path.isdir('{}/Boxplots'.format(results_dir)):
         raise FileExistsError(
-            'Directory {} exists - please rename this directory if you wish to '
-            'run this function to avoid overwriting the original '
+            'Directory {}/Boxplots exists - please rename this directory if you'
+            ' wish to run this function to avoid overwriting the original '
             'directory'.format(results_dir)
         )
     os.mkdir('{}/Boxplots'.format(results_dir))
 
     if not 'Analyte' in fluor_df.columns:
-        raise KeyError('No \'Analyte\' column in input dataframe')
+        raise KeyError(
+            'No "Analyte" column in input dataframe'
+        )
 
     classes = sorted([analyte for analyte in set(fluor_df['Analyte'].tolist())])
     if not class_order is None:
         try:
-            class_order = sorted(class_order)
             if classes != sorted(class_order):
                 raise ValueError(
                     'Expect class_order to be a list of analytes including every '
@@ -1077,7 +1093,7 @@ def draw_boxplots(
 
     if np.isinf(sub_fluor_df.values).any(axis=None) is np.bool_(True):
         raise ValueError(
-            'Infinite reading(s) found in input dataframe:\n'.format(fluor_df)
+            'Infinite reading(s) found in input dataframe:\n{}'.format(fluor_df)
         )
 
     # Generates plots
@@ -1615,7 +1631,7 @@ class ParseArrayData(DefData):
             if not analyte in orig_analytes:
                 print('\x1b[31m WARNING: Whilst removing analytes specified'
                       ' by the user to ignore, analyte {} is not '
-                      'recognised'.format(analyte))
+                      'recognised \033[0m'.format(analyte))
         upd_analytes = sorted([analyte for analyte in orig_analytes
                                if not analyte in self.control_analytes])
 
@@ -1870,7 +1886,7 @@ class ParseArrayData(DefData):
                         nan_df.iloc[nan_index] = 'Outlier: {}'.format(orig_val)
                     print(
                         '\x1b[31m Outlier excluded from final output dataset: {}, {}'
-                        '\n{}\n\033[0m'.format(index, analyte, nan_df)
+                        '\n{}\n \033[0m'.format(index, analyte, nan_df)
                     )
                     with open('{}/Sample_outliers.txt'.format(self.results_dir), 'a') as f:
                         f.write(
