@@ -3,6 +3,7 @@
 # Functions to perform ML analysis on parsed BADASS data.
 
 import copy
+import os
 import random
 import matplotlib.pyplot as plt
 import numpy as np
@@ -69,30 +70,34 @@ def make_separate_subclass_splits(subclasses, subclass_splits):
         raise TypeError(
             'Expect "subclasses" to be a (1D) array of subclass values'
         )
-    if subclasses.shape[1] != 1:
+    if len(subclasses.shape) != 1:
         raise ValueError('Expect "subclasses" to be a 1D array')
-    if pd.DataFrame(subclasses).isna().any(axis=None):
+    if pd.DataFrame(subclasses, dtype=object).isna().any(axis=None):
         raise ValueError('NaN value(s) detected in "subclasses" array')
 
     if type(subclass_splits) != np.ndarray:
         raise TypeError(
             'Expect "subclass_splits" to be a (2D) array of subclass values'
         )
-    if pd.DataFrame(subclass_splits).isna().any(axis=None):
+    if pd.DataFrame(subclass_splits, dtype=object).isna().any(axis=None):
         raise ValueError('NaN value(s) detected in "subclass_splits" array')
-    if np.unique(subclass_splits).size != subclass_splits.size:
+    if pd.unique(subclass_splits.flatten()).size != subclass_splits.size:
         raise ValueError(
             'Repeated subclass labels detected in "subclass_splits"'
         )
 
-    if (   sorted(list(set(list(subclasses))))
-        != sorted(list(set(list(subclass_splits.flatten()))))
-    ):
-        raise ValueError(
-            'Expect the same subclass identities to be found in both '
-            '"subclasses" and "subclass_splits", but instead have detected '
-            'subclasses unique to one of these arguments'
-        )
+    for val in subclasses:
+        if not val in subclass_splits.flatten():
+            raise ValueError(
+                'Subclass {} is found in "subclasses" but not "subclass_splits"'
+                ''.format(val)
+            )
+    for val in subclass_splits.flatten():
+        if not val in subclasses:
+            raise ValueError(
+                'Subclass {} is found in "subclass_splits" but not "subclasses"'
+                ''.format(val)
+            )
 
     for i in range(subclass_splits.shape[0]):
         split = []
@@ -107,26 +112,57 @@ def make_separate_subclass_splits(subclasses, subclass_splits):
         yield split
 
 
-def bootstrap_data(x, y, features, scale):
+def bootstrap_data(x, y, features, scale, test=False):
     """
     Generates bootstrapped repeat of input arrays (x and y)
 
     Input
     ----------
-    - x: Numpy array of x values. By default set to self.x.
-    - y: Numpy array of y values. By default set to self.y.
-    - features: List of input features corresponding to the columns in x. By
-    default set to self.features.
+    - x: Numpy array of x values.
+    - y: Numpy array of y values.
+    - features: List of input features corresponding to the columns in x.
     - scale: Boolean, defines whether to scale the data (by subtracting the
     median and dividing by the IQR) before calculating feature importances.
     By default is set to True since scaling the data will affect the
     importance scores.
+    - test: Boolean describing whether the function is being run during the
+    program's unit tests - by default is set to False
 
     Output
     ----------
     temp_x: Bootstrapped x array
     temp_y: Bootstrapped y array
     """
+
+    if type(x) != np.ndarray:
+        raise TypeError(
+            'Expect "x" to be a (2D) array of x values'
+        )
+    if type(y) != np.ndarray:
+        raise TypeError(
+            'Expect "y" to be a (1D) array of y values'
+        )
+    if len(y.shape) != 1:
+        raise ValueError(
+            'Expect "y" to be a 1D array of y values'
+        )
+    if x.shape[0] != y.shape[0]:
+        raise ValueError(
+            'Different numbers of rows in arrays "x" and "y"'
+        )
+    if type(features) != list:
+        raise TypeError(
+            'Expect "features" to be a list'
+        )
+    if len(features) != x.shape[1]:
+        raise ValueError(
+            'Expect entries in "features" list to correspond to the columns in "x"'
+        )
+    if type(scale) != bool:
+        raise TypeError(
+            'Expect "scale" to be a Boolean value (either True or False)'
+        )
+    test_rand_ints = [0, 6, 1, 3, 4, 5, 8, 0, 6, 5]
 
     random_rows = []
     temp_x = pd.DataFrame(
@@ -136,7 +172,10 @@ def bootstrap_data(x, y, features, scale):
         data=copy.deepcopy(y), index=None, columns=['Analyte']
     )
     for m in range(temp_x.shape[0]):
-        random_rows.append(random.randint(0, (temp_x.shape[0]-1)))
+        if test is False:
+            random_rows.append(random.randint(0, (temp_x.shape[0]-1)))
+        else:
+            random_rows.append(test_rand_ints[m])
     temp_x = temp_x.iloc[random_rows,:].reset_index(drop=True)
     temp_y = temp_y.iloc[random_rows,:].reset_index(drop=True)['Analyte'].tolist()
 
@@ -166,6 +205,37 @@ def make_feat_importance_plots(
     ----------
     - importance_df: DataFrame of features and their importance scores
     """
+
+    if not type(feature_importances) in [dict, OrderedDict]:
+        raise TypeError(
+            'Expect "feature_importances" to be a dictionary of importance '
+            'scores'
+        )
+    if not os.path.isdir(results_dir):
+        raise FileNotFoundError(
+            'Directory {} does not exist'.format(results_dir)
+        )
+    if type(plt_name) != str:
+        raise TypeError(
+            'Expect "plt_name" to a string to append to the start of the names '
+            'of the saved plots'
+        )
+    if os.path.isfile('{}/{}_feat_importance_percentiles.svg'.format(
+        results_dir, plt_name
+    )):
+        raise FileExistsError(
+            'File {}/{}_feat_importance_percentiles.svg already exists - please'
+            ' rename this file so it is not overwritten by running this '
+            'function'.format(results_dir, plt_name)
+        )
+    if os.path.isfile('{}/{}_feat_importance_all_data.svg'.format(
+        results_dir, plt_name
+    )):
+        raise FileExistsError(
+            'File {}/{}_feat_importance_all_data.svg already exists - please'
+            ' rename this file so it is not overwritten by running this '
+            'function'.format(results_dir, plt_name)
+        )
 
     cols = []
     cols_all = []
@@ -216,7 +286,13 @@ def make_feat_importance_plots(
         by=['Score'], axis=0, ascending=False
     ).reset_index(drop=True)
 
-    return importance_df
+    if test is False:
+        return importance_df
+    else:
+        return (
+            importance_df, cols, cols_all, all_vals, median_vals,
+            lower_conf_limit_vals, upper_conf_limit_vals
+        )
 
 
 def check_arguments(
@@ -363,15 +439,15 @@ def check_arguments(
                 'test data'
             )
 
-    if pd.DataFrame(x_train).isna().any(axis=None):
+    if pd.DataFrame(x_train, dtype=object).isna().any(axis=None):
         raise ValueError('NaN value(s) detected in "x_train" data')
-    if pd.DataFrame(y_train).isna().any(axis=None):
+    if pd.DataFrame(y_train, dtype=object).isna().any(axis=None):
         raise ValueError('NaN value(s) detected in "y_train" data')
-    if pd.DataFrame(train_groups).isna().any(axis=None):
+    if pd.DataFrame(train_groups, dtype=object).isna().any(axis=None):
         raise ValueError('NaN value(s) detected in "train_groups" data')
-    if pd.DataFrame(x_test).isna().any(axis=None):
+    if pd.DataFrame(x_test, dtype=object).isna().any(axis=None):
         raise ValueError('NaN value(s) detected in "x_test" data')
-    if pd.DataFrame(y_test).isna().any(axis=None):
+    if pd.DataFrame(y_test, dtype=object).isna().any(axis=None):
         raise ValueError('NaN value(s) detected in "y_test" data')
 
     if pd.DataFrame(x_train).applymap(
@@ -440,8 +516,6 @@ def check_arguments(
                 'positive integer value between 1 and the number of features'
             )
         else:
-            print(x_train_cols)
-            print(x_test_cols)
             if x_train_cols > 0:
                 if n_components_pca < 1 or n_components_pca > x_train_cols:
                     raise ValueError(
@@ -606,7 +680,7 @@ class RunML(DefData):
 
     def __init__(
         self, results_dir, fluor_data, classes=None, subclasses=None,
-        shuffle=True
+        shuffle=True, test=False
     ):
         """
         - results_dir: Path (either absolute or relative) to directory where
@@ -627,42 +701,53 @@ class RunML(DefData):
         - shuffle: Boolean, setting to True directs the program to randomly
         shuffle the input data before ML (to ensure removal of any ordering
         effects in the input data.) Default set to True.
+        - test: Boolean describing whether the function is being run during the
+        program's unit tests - by default is set to False
         """
 
-        DefData.__init__(self, results_dir)
+        DefData.__init__(self, results_dir, test)
 
         # Checks that if subclasses are defined, classes are also defined
-        if not subclasses is None and classes is None:
-            raise TypeError(
-                '"subclasses" argument cannot be set to a value other than None'
-                ' if the "classes" argument is set equal to None'
-            )
+        if not subclasses is None:
+            if classes is None:
+                raise TypeError(
+                    'If "subclasses" is set to a value other than None, then '
+                    '"classes" must also be set to a value other than None'
+                )
         # Checks that classes argument is the correct type
         if not classes is None:
             if not type(classes) is list:
                 raise TypeError(
                     'Expect "classes" argument to be set either to None or to a'
-                    ' list, instead is {}'.format(type(classes))
+                    ' list'
                 )
         # Checks that subclasses argument is the correct type
         if not subclasses is None:
             if not type(subclasses) is list:
                 raise TypeError(
                     'Expect "subclasses" argument to be set either to None or '
-                    'to a list, instead is {}'.format(type(subclasses))
+                    'to a list'
                 )
             for subclass in subclasses:
-                if subclass.count('_') != 0:
-                    raise ValueError(
-                        'Entries in subclass list should be formatted as '
-                        '"class_subclass" (in which neither "class" nor '
-                        '"subclass" contains the character "_")'
-                    )
+                if type(subclass) == str:
+                    if subclass.count('_') != 1:
+                        raise ValueError(
+                            'Entries in subclass list should be formatted as '
+                            '"class_subclass" (in which neither "class" nor '
+                            '"subclass" contains the character "_")'
+                        )
+                    else:
+                        if not subclass.split('_')[0] in classes:
+                            raise ValueError(
+                                'Entries in subclass list should be formatted '
+                                'as "class_subclass" (in which neither "class" '
+                                'nor "subclass" contains the character "_")'
+                            )
 
         # Defines classes and subclasses lists if not specified by the user
         if classes is None:
             try:
-                classes = fluor_df['Analyte'].tolist()
+                classes = fluor_data['Analyte'].tolist()
             except KeyError:
                 raise KeyError(
                     'No "Analyte" column detected in input dataframe - if you '
@@ -670,13 +755,13 @@ class RunML(DefData):
                     ' must contain an "Analyte" column'
             )
         if subclasses is None:
-            subclasses = [np.nan for n in range(fluor_df.shape[0])]
-        if len(classes) != fluor_df.shape[0]:
+            subclasses = [np.nan for n in range(fluor_data.shape[0])]
+        if len(classes) != fluor_data.shape[0]:
             raise ValueError(
                 'Mismatch between number of entries in the input dataframe and '
                 'the "classes" list'
             )
-        if len(subclasses) != fluor_df.shape[0]:
+        if len(subclasses) != fluor_data.shape[0]:
             raise ValueError(
                 'Mismatch between number of entries in the input dataframe and '
                 'the "subclasses" list'
@@ -697,6 +782,11 @@ class RunML(DefData):
             [fluor_data, class_df], axis=1
         ).reset_index(drop=True)
 
+        # Checks that "shuffle" is a Boolean value
+        if type(shuffle) != bool:
+            raise TypeError(
+                'Expect "shuffle" to be a Boolean value (True or False)'
+            )
         # Randomly shuffles input data
         if shuffle is True:
             indices = [i for i in range(fluor_data.shape[0])]
@@ -717,7 +807,7 @@ class RunML(DefData):
         self.y = copy.deepcopy(self.classes)
 
         # Checks there are no NaN values in the input data
-        if self.fluor_data.isna().any(axis=None):
+        if self.fluor_data.astype('object').isna().any(axis=None):
             raise ValueError(
                 'NaN detected in input dataframe'
             )
@@ -763,10 +853,14 @@ class RunML(DefData):
             raise TypeError('Expect "x" to be an array of x values')
         if type(y) != np.ndarray:
             raise TypeError('Expect "y" to be an array of y values')
-        if pd.DataFrame(x).isna().any(axis=None):
+        if pd.DataFrame(x, dtype=object).isna().any(axis=None):
             raise ValueError('NaN value(s) detected in "x" data')
-        if pd.DataFrame(y).isna().any(axis=None):
+        if pd.DataFrame(y, dtype=object).isna().any(axis=None):
             raise ValueError('NaN value(s) detected in "y" data')
+        if x.shape[0] != y.shape[0]:
+            raise ValueError(
+                'Mismatch in the dimensions of the input "x" and "y" values'
+            )
 
         if not type(percent_test) in [int, float]:
             raise TypeError(
@@ -815,23 +909,31 @@ class RunML(DefData):
 
         if type(subclasses) != np.ndarray:
             raise TypeError(
-                'Expect "subclasses" to be an array of subclass values'
+                'Expect "subclasses" to be a (1D) array of subclass values'
             )
-        if subclasses.shape[1] != 1:
+        if len(subclasses.shape) != 1:
             raise ValueError('Expect "subclasses" to be a 1D array')
-        if pd.DataFrame(subclasses).isna().any(axis=None):
+        if pd.DataFrame(subclasses, dtype=object).isna().any(axis=None):
             raise ValueError('NaN value(s) detected in "subclasses" array')
 
         if type(test_subclasses) != np.ndarray:
-            raise ValueError(
-                'Expect "test_subclasses" argument to be an array of subclass '
-                'values, instead have been provided with '
-                '{}'.format(type(test_subclasses))
+            raise TypeError(
+                'Expect "test_subclasses" argument to be a (1D) array of the '
+                'subclass values that should be separated out into the test set'
             )
-        if test_subclasses.shape[1] != 1:
+        if len(test_subclasses.shape) != 1:
             raise ValueError('Expect "test_subclasses" to be a 1D array')
-        if pd.DataFrame(test_subclasses).isna().any(axis=None):
-            raise ValueError('NaN value(s) detected in "subclasses" array')
+        if pd.DataFrame(test_subclasses, dtype=object).isna().any(axis=None):
+            raise ValueError('NaN value(s) detected in "test_subclasses" array')
+
+        for subclass in test_subclasses:
+            if not subclass in subclasses:
+                raise ValueError(
+                    'Not all of the entries in the "test_subclasses" array are '
+                    'found in the "subclasses" array. Expect "test_subclasses" '
+                    'argument to be a (1D) array of the subclass values that '
+                    'should be separated out into the test set'
+                )
 
         train_indices = []
         test_indices = []
@@ -847,16 +949,16 @@ class RunML(DefData):
         return split
 
     def calc_feature_correlations(
-        self, train_data=None, correlation_coeff='kendall',
+        self, fluor_data=None, correlation_coeff='kendall',
         plt_name='', abs_vals=True, test=False
     ):
         """
-        Calculates pairwise Kendall tau rank correlation coefficient values
-        between all 2-way combinations of features, and plots a heatmap.
+        Calculates correlation coefficient values between all 2-way combinations
+        of features, and plots a heatmap.
 
         Input
         ----------
-        - train_data: DataFrame of the training data. By default set to
+        - fluor_data: DataFrame of fluorescence readings. By default set to
         self.fluor_data
         - correlation_coeff: String defining the coefficient coefficient to be
         calculate between the data, by default is set to Kendall's tau. Can
@@ -877,8 +979,26 @@ class RunML(DefData):
         """
 
         # Checks arguments are suitable for running the function
-        if train_data is None:
-            train_data = copy.deepcopy(self.fluor_data)
+        if fluor_data is None:
+            fluor_data = copy.deepcopy(self.fluor_data)
+
+        if type(fluor_data) != pd.core.frame.DataFrame:
+            raise TypeError(
+                '"fluor_data" should be a dataframe of fluorescence readings'
+            )
+
+        if fluor_data.applymap(
+            lambda x: isinstance(x, (int, float))).all(axis=None, skipna=False
+        ) is np.bool_(False):
+            raise ValueError(
+                'Non-numeric value(s) in "fluor_data" - expect all values in '
+                '"fluor_data" to be integers / floats'
+            )
+
+        if fluor_data.isna().any(axis=None):
+            raise ValueError(
+                'NaN value(s) found in "fluor_data"'
+            )
 
         if not correlation_coeff in ['kendall', 'spearman', 'pearson']:
             raise ValueError(
@@ -897,7 +1017,9 @@ class RunML(DefData):
             )
 
         # Calculates the correlation coefficient
-        correlation_matrix = copy.deepcopy(train_data).corr(method=correlation_coeff)
+        correlation_matrix = copy.deepcopy(fluor_data).corr(
+            method=correlation_coeff
+        )
         if abs_vals is True:
             correlation_matrix = correlation_matrix.abs()
 
@@ -1453,6 +1575,17 @@ class RunML(DefData):
             params = OrderedDict()
         elif type(classifier).__name__ == 'GaussianNB':
             params = OrderedDict()
+        else:
+            raise TypeError(
+                'Unrecognised value provided for "classifier". Expect '
+                '"classifier" to be one of:\n'
+                'sklearn.linear_model.LogisticRegression()\n'
+                'sklearn.neighbors.KNeighborsClassifier()\n'
+                'sklearn.svm.LinearSVC()\n'
+                'sklearn.svm.SVC()\n'
+                'sklearn.ensemble.AdaBoostClassifier()\n'
+                'sklearn.naive_bayes.GaussianNB()'
+            )
 
         return params
 
@@ -1477,6 +1610,11 @@ class RunML(DefData):
         - params: Dictionary of parameter ranges that can be fed into
         RandomizedSearchCV or GridSearchCV
         """
+
+        if type(x_train) != np.ndarray:
+            raise TypeError(
+                '"x_train" should be a (2D) array of fluoresence readings'
+            )
 
         if type(n_folds) != int:
             raise TypeError(
@@ -1524,10 +1662,21 @@ class RunML(DefData):
                     'Too few data points in dataset to use AdaBoost classifier'
                 )
             else:
-                n_estimators = [int(x) for x in np.logspace(1, 4, 7)]
+                n_estimators = np.array([int(x) for x in np.logspace(1, 4, 7)])
                 params = OrderedDict({'n_estimators': n_estimators})
         elif type(classifier).__name__ == 'GaussianNB':
             params = OrderedDict()
+        else:
+            raise TypeError(
+                'Unrecognised value provided for "classifier". Expect '
+                '"classifier" to be one of:\n'
+                'sklearn.linear_model.LogisticRegression()\n'
+                'sklearn.neighbors.KNeighborsClassifier()\n'
+                'sklearn.svm.LinearSVC()\n'
+                'sklearn.svm.SVC()\n'
+                'sklearn.ensemble.AdaBoostClassifier()\n'
+                'sklearn.naive_bayes.GaussianNB()'
+            )
 
         return params
 
@@ -1548,6 +1697,23 @@ class RunML(DefData):
         program's unit tests - by default is set to False
         """
 
+        if not type(best_params) in [dict, OrderedDict]:
+            raise TypeError(
+                'Expect "best_params" to be a dictionary of "optimal" parameter'
+                ' values returned after running an algorithm such as '
+                'RandomizedSearchCV or GridSearchCV'
+            )
+        if not type(poss_params) in [dict, OrderedDict]:
+            raise TypeError(
+                'Expect "poss_params" to be the dictionary of parameter ranges '
+                'fed into the optimisation algorithm, such as that returned by '
+                'define_model_params function'
+            )
+        if best_params.keys() != poss_params.keys():
+            raise ValueError(
+                'Mismatch in the keys in "best_params" and "poss_params"'
+            )
+
         for param, best_val in best_params.items():
             poss_vals = poss_params[param]
             # If clauses are at separate indentations to avoid raising errors
@@ -1557,11 +1723,17 @@ class RunML(DefData):
                     and len(poss_vals) > 2
                 ):
                     if best_val in [poss_vals[0], poss_vals[-1]]:
-                        print('\x1b[31m WARNING: Optimal value selected for {} is at '
-                              'the extreme of the range tested \033[0m'.format(param))
-                        print('Range tested: {}'.format(poss_vals))
-                        print('Value selected: {}'.format(best_val))
-                        print('\n\n')
+                        warning = (
+                            '\x1b[31m WARNING: Optimal value selected for {} is'
+                            ' at the extreme of the range tested \033[0m '.format(param)
+                        )
+                        warning += '\nRange tested: {}\nValue selected: {}\n\n'.format(
+                            list(poss_vals), best_val
+                        )
+                        if test is False:
+                            print(warning)
+                        else:
+                            return warning
 
     def conv_resampling_method(self, resampling_method):
         """
@@ -1720,7 +1892,7 @@ class RunML(DefData):
         )
         random_search.fit(X=x_train, y=y_train, groups=train_groups)
 
-        self.flag_extreme_params(random_search.best_params_, params)
+        self.flag_extreme_params(random_search.best_params_, params, test)
 
         return random_search
 

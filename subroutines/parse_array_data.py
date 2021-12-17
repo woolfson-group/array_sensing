@@ -1159,7 +1159,7 @@ def draw_boxplots(
 
 class DefData():
 
-    def __init__(self, results_dir):
+    def __init__(self, results_dir, test=False):
         """
         - results_dir: Path (either absolute or relative) to directory where
         output files should be saved. This directory will be created by the
@@ -1169,23 +1169,31 @@ class DefData():
         if not os.path.isdir(results_dir):
             os.makedirs(results_dir)
         else:
-            print('Directory {} already found in {}'.format(results_dir, os.getcwd()))
-            remove = ''
-            while not isinstance(remove, bool):
-                remove = input('Overwrite {}?'.format(results_dir))
-                if remove.strip().lower() in ['true', 'yes', 'y']:
-                    remove = True
-                elif remove.strip().lower() in ['false', 'no', 'n']:
-                    remove = False
-                else:
-                    print('Input not recognised - please specify "yes" or "no"')
-                    remove = ''
-            if remove is True:
-                shutil.rmtree(results_dir)
-                os.mkdir(results_dir)
+            if test is True:
+                raise FileExistsError('Directory {} already found in {}'.format(
+                    results_dir, os.getcwd()
+                ))
             else:
-                print('Please specify a unique directory name for results to be '
-                      'stored in')
+                print('Directory {} already found in {}'.format(
+                    results_dir, os.getcwd()
+                ))
+                remove = ''
+                while not isinstance(remove, bool):
+                    remove = input('Overwrite {}?\n'.format(results_dir))
+                    if remove.strip().lower() in ['true', 'yes', 'y']:
+                        remove = True
+                    elif remove.strip().lower() in ['false', 'no', 'n']:
+                        remove = False
+                    else:
+                        print('Input not recognised - please specify "yes" or '
+                              '"no"')
+                        remove = ''
+                if remove is True:
+                    shutil.rmtree(results_dir)
+                    os.mkdir(results_dir)
+                else:
+                    print('Please specify a unique directory name for results '
+                          'to be stored in')
         self.results_dir = results_dir.rstrip('/')
 
 
