@@ -162,7 +162,7 @@ def bootstrap_data(x, y, features, scale, test=False):
         raise TypeError(
             'Expect "scale" to be a Boolean value (either True or False)'
         )
-    test_rand_ints = [0, 6, 1, 3, 4, 5, 8, 0, 6, 5]
+    test_rand_ints = [0, 6, 1, 3, 4, 5, 8, 0, 6, 5, 4, 7]
 
     random_rows = []
     temp_x = pd.DataFrame(
@@ -1086,6 +1086,43 @@ class RunML(DefData):
         if features is None:
             features = copy.deepcopy(self.features)
 
+        if type(x) != np.ndarray:
+            raise TypeError(
+                'Expect "x" to be a (2D) array of fluorescence readings'
+            )
+
+        if len(x.shape) != 2:
+            raise ValueError(
+                'Expect "x" to be a (2D) array of fluorescence readings'
+            )
+
+        if type(y) != np.ndarray:
+            raise TypeError(
+                'Expect "y" to be a (1D) array of class labels'
+            )
+
+        if len(y.shape) != 1:
+            raise ValueError(
+                'Expect "y" to be a (1D) array of class labels'
+            )
+
+        if type(features) != list:
+            raise TypeError(
+                'Expect "features" to be a list of the column ids in "x"'
+            )
+
+        if x.shape[0] != y.shape[0]:
+            raise ValueError(
+                'Mismatch between the number of rows in "x" and the number of '
+                'entries in "y"'
+            )
+
+        if x.shape[1] != len(features):
+            raise ValueError(
+                'Mismatch between the number of columns in "x" and the number '
+                'of column ids in "features"'
+            )
+
         if not method_classif in [
             f_classif, mutual_info_classif, 'f_classif', 'mutual_info_classif'
         ]:
@@ -1093,6 +1130,7 @@ class RunML(DefData):
                 '"method_classif" should be set to either "f_classif" or '
                 '"mutual_info_classif"'
             )
+
         if method_classif == 'f_classif':
             method_classif = f_classif
         elif method_classif == 'mutual_info_classif':
@@ -1125,7 +1163,7 @@ class RunML(DefData):
 
         for n in range(num_repeats):
             # Uses bootstrapping to create a "new" dataset
-            temp_x, temp_y = bootstrap_data(x, y, features, scale)
+            temp_x, temp_y = bootstrap_data(x, y, features, scale, test)
 
             model = SelectKBest(score_func=method_classif, k='all')
             model.fit(X=temp_x, y=temp_y)
@@ -1137,7 +1175,10 @@ class RunML(DefData):
                 univ_feature_importances[col][n] = importance
 
         plt_name = '{}_KBest'.format(plt_name)
-        importance_df = make_feat_importance_plots(
+        (
+            importance_df, cols, cols_all, all_vals, median_vals,
+            lower_conf_limit_vals, upper_conf_limit_vals
+        ) = make_feat_importance_plots(
             univ_feature_importances, self.results_dir, plt_name, test
         )
 
@@ -1190,6 +1231,43 @@ class RunML(DefData):
         if features is None:
             features = copy.deepcopy(self.features)
 
+        if type(x) != np.ndarray:
+            raise TypeError(
+                'Expect "x" to be a (2D) array of fluorescence readings'
+            )
+
+        if len(x.shape) != 2:
+            raise ValueError(
+                'Expect "x" to be a (2D) array of fluorescence readings'
+            )
+
+        if type(y) != np.ndarray:
+            raise TypeError(
+                'Expect "y" to be a (1D) array of class labels'
+            )
+
+        if len(y.shape) != 1:
+            raise ValueError(
+                'Expect "y" to be a (1D) array of class labels'
+            )
+
+        if type(features) != list:
+            raise TypeError(
+                'Expect "features" to be a list of the column ids in "x"'
+            )
+
+        if x.shape[0] != y.shape[0]:
+            raise ValueError(
+                'Mismatch between the number of rows in "x" and the number of '
+                'entries in "y"'
+            )
+
+        if x.shape[1] != len(features):
+            raise ValueError(
+                'Mismatch between the number of columns in "x" and the number '
+                'of column ids in "features"'
+            )
+
         if type(num_repeats) != int:
             raise TypeError(
                 '"num_repeats" should be set to a positive integer value'
@@ -1217,7 +1295,7 @@ class RunML(DefData):
 
         for n in range(num_repeats):
             # Uses bootstrapping to create a "new" dataset
-            temp_x, temp_y = bootstrap_data(x, y, features, scale)
+            temp_x, temp_y = bootstrap_data(x, y, features, scale, test)
 
             model = ExtraTreesClassifier()
             model.fit(X=temp_x, y=temp_y)
@@ -1228,7 +1306,10 @@ class RunML(DefData):
                 tree_feature_importances[col][n] = importance
 
         plt_name = '{}_Tree'.format(plt_name)
-        importance_df = make_feat_importance_plots(
+        (
+            importance_df, cols, cols_all, all_vals, median_vals,
+            lower_conf_limit_vals, upper_conf_limit_vals
+         ) = make_feat_importance_plots(
             tree_feature_importances, self.results_dir, plt_name, test
         )
 
@@ -1293,6 +1374,68 @@ class RunML(DefData):
         if features is None:
             features = copy.deepcopy(self.features)
 
+        if type(x) != np.ndarray:
+            raise TypeError(
+                'Expect "x" to be a (2D) array of fluorescence readings'
+            )
+
+        if len(x.shape) != 2:
+            raise ValueError(
+                'Expect "x" to be a (2D) array of fluorescence readings'
+            )
+
+        if type(y) != np.ndarray:
+            raise TypeError(
+                'Expect "y" to be a (1D) array of class labels'
+            )
+
+        if len(y.shape) != 1:
+            raise ValueError(
+                'Expect "y" to be a (1D) array of class labels'
+            )
+
+        if type(features) != list:
+            raise TypeError(
+                'Expect "features" to be a list of the column ids in "x"'
+            )
+
+        if x.shape[0] != y.shape[0]:
+            raise ValueError(
+                'Mismatch between the number of rows in "x" and the number of '
+                'entries in "y"'
+            )
+
+        if x.shape[1] != len(features):
+            raise ValueError(
+                'Mismatch between the number of columns in "x" and the number '
+                'of column ids in "features"'
+            )
+
+        if not type(parameters) in [dict, OrderedDict]:
+            raise TypeError(
+                'Expect "parameters" to be a dictionary of parameter names '
+                '(keys) and arrays of values to consider for them (values) in a'
+                ' grid search'
+            )
+
+        metrics_list = [
+            'accuracy', 'balanced_accuracy', 'top_k_accuracy',
+            'average_precision','neg_brier_score', 'f1', 'f1_micro', 'f1_macro',
+            'f1_weighted','f1_samples', 'neg_log_loss', 'precision',
+            'precision_micro','precision_macro', 'precision_weighted',
+            'precision_samples', 'recall','recall_micro', 'recall_macro',
+            'recall_weighted', 'recall_samples','jaccard', 'jaccard_micro',
+            'jaccard_macro', 'jaccard_weighted','jaccard_samples', 'roc_auc',
+            'roc_auc_ovr', 'roc_auc_ovo','roc_auc_ovr_weighted',
+            'roc_auc_ovo_weighted'
+        ]
+        if not model_metric in metrics_list:
+            raise ValueError(
+                'Value provided for "model_metric" not recognised - please '
+                'specify one of the strings in the list below:\n'
+                '{}'.format(metrics_list)
+            )
+
         if type(num_repeats) != int:
             raise TypeError(
                 '"num_repeats" should be set to a positive integer value'
@@ -1323,30 +1466,52 @@ class RunML(DefData):
         # bootstrapped dataset => greatly increases function speed whilst having
         # little effect upon performance (an OK set of parameter values is
         # expected to work well for all of the bootstrapped datasets)
-        orig_model = classifier()
+        if test is False:
+            orig_model = copy.deepcopy(classifier)()
+        else:
+            orig_model = copy.deepcopy(classifier)(random_state=1)
         orig_grid_search = GridSearchCV(
-         estimator=orig_model, param_grid=parameters, error_score=np.nan,
-         scoring=model_metric
+            estimator=orig_model, param_grid=parameters, error_score=np.nan,
+            scoring=model_metric
         )
-        orig_grid_search.fit(X=x, y=y)
+
+        if scale is True:
+            scaled_x = RobustScaler().fit_transform(x)
+            orig_grid_search.fit(X=scaled_x, y=y)
+        else:
+            orig_grid_search.fit(X=x, y=y)
         best_params = orig_grid_search.best_params_
 
         for n in range(num_repeats):
             # Uses bootstrapping to create a "new" dataset
-            temp_x, temp_y = bootstrap_data(x, y, features, scale)
+            temp_x, temp_y = bootstrap_data(x, y, features, scale, test)
+            temp_x = temp_x.to_numpy()
+            temp_y = np.array(temp_y)
 
-            model = classifier(**best_params)
-            model_boost.fit(temp_x, temp_y)
-            results = permutation_importance(
-                model, temp_x, temp_y, scoring='accuracy', n_jobs=-1
-            )
+            if test is True:
+                best_params['random_state'] = 1
+            model = copy.deepcopy(classifier)(**best_params)
+            model.fit(temp_x, temp_y)
+
+            if test is False:
+                results = permutation_importance(
+                    model, temp_x, temp_y, scoring=model_metric, n_jobs=-1
+                )
+            else:
+                results = permutation_importance(
+                    model, temp_x, temp_y, scoring=model_metric, n_jobs=-1,
+                    random_state=1
+                )
 
             for col, importance in enumerate(results.importances_mean):
                 col = features[col]
                 permutation_feature_importances[col][n] = importance
 
         plt_name = '{}_Permutation'.format(plt_name)
-        importance_df = make_feat_importance_plots(
+        (
+            importance_df, cols, cols_all, all_vals, median_vals,
+            lower_conf_limit_vals, upper_conf_limit_vals
+         ) = make_feat_importance_plots(
             permutation_feature_importances, self.results_dir, plt_name, test
         )
 
@@ -1376,20 +1541,22 @@ class RunML(DefData):
         # Checks argument values are suitable for running the function
         if x is None:
             x = copy.deepcopy(self.x)
-        if y is None:
-            y = copy.deepcopy(self.y)
-        if features is None:
-            features = copy.deepcopy(self.features)
+
+        if type(x) != np.ndarray:
+            raise TypeError(
+                'Expect "x" to be a (2D) array of fluorescence readings'
+            )
+
+        if len(x.shape) != 2:
+            raise ValueError(
+                'Expect "x" to be a (2D) array of fluorescence readings'
+            )
 
         if type(scale) != bool:
-            raise TypeError(
-                '"scale" should be set to a Boolean value'
-            )
+            raise TypeError('"scale" should be set to a Boolean value')
 
         if type(plt_name) != str:
-            raise TypeError(
-                '"plt_name" should be a string value'
-            )
+            raise TypeError('"plt_name" should be a string value')
 
         # Runs PCA
         if scale is True:
@@ -1443,34 +1610,67 @@ class RunML(DefData):
             y = copy.deepcopy(self.y)
         if subclasses is None:
             subclasses = copy.deepcopy(self.sub_classes)
+
+        if type(x) != np.ndarray:
+            raise TypeError(
+                'Expect "x" to be a (2D) array of fluorescence readings'
+            )
+
+        if len(x.shape) != 2:
+            raise ValueError(
+                'Expect "x" to be a (2D) array of fluorescence readings'
+            )
+
+        if type(y) != np.ndarray:
+            raise TypeError(
+                'Expect "y" to be a (1D) array of class labels'
+            )
+
+        if len(y.shape) != 1:
+            raise ValueError(
+                'Expect "y" to be a (1D) array of class labels'
+            )
+
+        if x.shape[0] != y.shape[0]:
+            raise ValueError(
+                'Mismatch between the number of rows in "x" and the number of '
+                'entries in "y"'
+            )
+
         if not subclasses is None:
             if type(subclasses) != np.ndarray:
                 raise TypeError(
-                    'Expect "sub_classes" to be set either to None, or to a '
-                    '(1D) array of the subclasses present in the dataset'
+                    'Expect "subclasses" to be set either to None, or to a (1D)'
+                    ' array of the subclasses present in the dataset'
+                )
+
+            if len(subclasses.shape) != 1:
+                raise ValueError(
+                    'Expect "subclasses" to be set either to None, or to a (1D)'
+                    ' array of the subclasses present in the dataset'
+                )
+
+            if x.shape[0] != subclasses.shape[0]:
+                raise ValueError(
+                    'Mismatch between the number of rows in "x" and the number '
+                    'of entries in "subclasses"'
                 )
 
         if not num_dimensions in [2, 3]:
-            raise ValueError(
-                'Expect "num_dimensions" to be set to 2 or 3'
-            )
+            raise ValueError('Expect "num_dimensions" to be set to 2 or 3')
 
         if type(scale) != bool:
-            raise TypeError(
-                '"scale" should be a Boolean (True or False)'
-            )
+            raise TypeError('"scale" should be a Boolean (True or False)')
 
         if type(plt_name) != str:
-            raise TypeError(
-                '"plt_name" should be a string value'
-            )
+            raise TypeError('"plt_name" should be a string value')
 
         # Selects marker colour and symbol
         colours = [key for key, val in BASE_COLORS.items()]
         extra_colours = [key for key, val in CSS4_COLORS.items()]
         colours += extra_colours[::-1]
-        markers = [marker for marker in list(Line2D.markers.values())
-                   if not marker in ['pixel', 'circle', 'nothing']]
+        markers = ['o', 'v', '^', '<', '>', '8', 's', 'p', '*', 'h', 'H', 'D',
+                   'd', 'P', 'X']
 
         categories = []
         if subclasses is None:
@@ -1502,27 +1702,33 @@ class RunML(DefData):
 
         cat_colours = {}
         for cat in cat_markers.keys():
-            cat_class = cat.split('_')
+            cat_class = cat.split('_')[0]
             colour = cat_class_colours[cat_class]
             cat_colours[cat.rstrip('_')] = colour
 
         # Runs PCA
+        if scale is True:
+            x = RobustScaler().fit_transform(x)
         pca = PCA(n_components=num_dimensions)
-        pca_fitted = pca.fit(X=x)
-        X_reduced = pca_fitted.transform(X=x)
+        X_reduced = pca.fit_transform(X=x)
 
         # Generates scatter plot
         fig = plt.figure()
+        if subclasses is None:
+            plot_y = copy.deepcopy(y)
+        else:
+            plot_y = copy.deepcopy(subclasses)
+
         if num_dimensions == 2:
             ax = fig.add_subplot(111)
-            for i, y_val in np.ndenumerate(y):
+            for i, y_val in np.ndenumerate(plot_y):
                 scatter = ax.scatter(
                     X_reduced[i[0],0], X_reduced[i[0],1], c=cat_colours[y_val],
                     marker=cat_markers[y_val]
                 )
-        elif dimensions == 3:
+        elif num_dimensions == 3:
             ax = fig.add_subplot(111, projection='3d')
-            for i, y_val in np.ndenumerate(y):
+            for i, y_val in np.ndenumerate(plot_y):
                 scatter = ax.scatter(
                     X_reduced[i[0],0], X_reduced[i[0],1], X_reduced[i[0],2],
                     c=cat_colours[y_val], marker=cat_markers[y_val]
@@ -1542,6 +1748,8 @@ class RunML(DefData):
         ))
         if test is False:
             plt.show()
+        else:
+            return (cat_class_colours, cat_markers, cat_colours, X_reduced)
 
     def define_fixed_model_params(self, classifier):
         """

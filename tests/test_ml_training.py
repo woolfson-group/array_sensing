@@ -1854,8 +1854,181 @@ class TestClass(unittest.TestCase):
 
         print('Testing calc_feature_importances_kbest')
 
+        results_dir = 'tests/Temp_output'
+        fluor_data = pd.DataFrame({'Feature_1': [4, 2, 7, 9],
+                                   'Feature_2': [6, 6, 2, 6],
+                                   'Feature_3': [8, 6, 4, 2]})
+        classes = ['A', 'B', 'B', 'A']
+        subclasses = ['A_1', 'B_1', 'B_2', 'A_2']
+        shuffle = False
+
+        test_ml_train = RunML(
+            results_dir, fluor_data, classes, subclasses, shuffle, True
+        )
+
+        # Defines function arguments
+        x = None
+        y = None
+        features = None
+        method_classif = 'f_classif'
+        num_repeats = 1000
+        scale = True
+        plt_name = ''
+
+        # Test "x" is a numpy array
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_kbest(
+                fluor_data, y, features, method_classif, num_repeats, scale,
+                plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "x" to be a (2D) array of '
+            'fluorescence readings'
+        )
+
+        # Test "x" is a 2D array
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_kbest(
+                fluor_data.to_numpy().flatten(), y, features, method_classif,
+                num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "x" to be a (2D) array of '
+            'fluorescence readings'
+        )
+
+        # Test "y" is a numpy array
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_kbest(
+                fluor_data.to_numpy(), classes, features, method_classif,
+                num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "y" to be a (1D) array of class '
+            'labels'
+        )
+
+        # Test "y" is a 1D array
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_kbest(
+                x, fluor_data.to_numpy(), features, method_classif, num_repeats,
+                scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "y" to be a (1D) array of class '
+            'labels'
+        )
+
+        # Test "features" is a list
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_kbest(
+                fluor_data.to_numpy(), np.array(classes), fluor_data.columns,
+                method_classif, num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "features" to be a list of the '
+            'column ids in "x"'
+        )
+
+        # Test that dimensions of "x" and "y" match
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_kbest(
+                x, np.array([1, 2, 3]), features, method_classif, num_repeats,
+                scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Mismatch between the number of rows in "x"'
+            ' and the number of entries in "y"'
+        )
+
+        # Test that dimensions of "x" and "features" match
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_kbest(
+                x, y, fluor_data.columns.tolist()[:2], method_classif,
+                num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Mismatch between the number of columns in '
+            '"x" and the number of column ids in "features"'
+        )
+
+        # Test "method_classif" is a recognised value
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_kbest(
+                x, y, features, 'fclassif', num_repeats, scale, plt_name,
+                True
+            )
+        self.assertEqual(
+            str(message.exception), '"method_classif" should be set to either '
+            '"f_classif" or "mutual_info_classif"'
+        )
+
+        # Test "num_repeats" is an integer
+        from sklearn.feature_selection import f_classif
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_kbest(
+                x, y, features, f_classif, 1000., scale, plt_name,
+                True
+            )
+        self.assertEqual(
+            str(message.exception), '"num_repeats" should be set to a positive '
+            'integer value'
+        )
+
+        # Test "num_repeats" is a positive integer
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_kbest(
+                x, y, features, method_classif, -4, scale, plt_name,
+                True
+            )
+        self.assertEqual(
+            str(message.exception), '"num_repeats" should be set to a positive '
+            'integer value'
+        )
+
+        # Test "scale" is a Boolean
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_kbest(
+                x, y, features, method_classif, num_repeats, 1, plt_name,
+                True
+            )
+        self.assertEqual(
+            str(message.exception), '"scale" should be set to a Boolean value'
+        )
+
+        # Test "plt_name" is a string
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_kbest(
+                x, y, features, method_classif, num_repeats, scale, True,
+                True
+            )
+        self.assertEqual(
+            str(message.exception), '"plt_name" should be a string value'
+        )
+
+        # Test KBest feature selection
+        exp_importance_df = pd.DataFrame({'Feature': ['Feature_1', 'Feature_2'],
+                                          'Score': [0.91984923, 0.08015077]})
+        act_importance_df = test_ml_train.calc_feature_importances_kbest(
+            np.array([[2, 2],
+                      [1, 10],
+                      [2, 3],
+                      [1, 1],
+                      [2, 7],
+                      [10, 6],
+                      [7, 2],
+                      [2, 2],
+                      [1, 10],
+                      [10, 6],
+                      [2, 7],
+                      [3, 8]]),
+            np.array(['A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B']),
+            ['Feature_1', 'Feature_2'], 'f_classif', 10, True, '', True
+        )
+        pd.testing.assert_frame_equal(exp_importance_df, act_importance_df)
+
         # Removes directory created by defining RunML object
-        #shutil.rmtree('tests/Temp_output')
+        shutil.rmtree('tests/Temp_output')
 
     def test_calc_feature_importances_tree(self):
         """
@@ -1864,8 +2037,163 @@ class TestClass(unittest.TestCase):
 
         print('Testing calc_feature_importances_tree')
 
+        results_dir = 'tests/Temp_output'
+        fluor_data = pd.DataFrame({'Feature_1': [4, 2, 7, 9],
+                                   'Feature_2': [6, 6, 2, 6],
+                                   'Feature_3': [8, 6, 4, 2]})
+        classes = ['A', 'B', 'B', 'A']
+        subclasses = ['A_1', 'B_1', 'B_2', 'A_2']
+        shuffle = False
+
+        test_ml_train = RunML(
+            results_dir, fluor_data, classes, subclasses, shuffle, True
+        )
+
+        # Defines function arguments
+        x = None
+        y = None
+        features = None
+        num_repeats = 1000
+        scale = True
+        plt_name = ''
+
+        # Test "x" is a numpy array
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_tree(
+                fluor_data, y, features, num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "x" to be a (2D) array of '
+            'fluorescence readings'
+        )
+
+        # Test "x" is a 2D array
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_tree(
+                fluor_data.to_numpy().flatten(), y, features, num_repeats,
+                scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "x" to be a (2D) array of '
+            'fluorescence readings'
+        )
+
+        # Test "y" is a numpy array
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_tree(
+                fluor_data.to_numpy(), classes, features, num_repeats, scale,
+                plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "y" to be a (1D) array of class '
+            'labels'
+        )
+
+        # Test "y" is a 1D array
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_tree(
+                x, fluor_data.to_numpy(), features, num_repeats, scale,
+                plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "y" to be a (1D) array of class '
+            'labels'
+        )
+
+        # Test "features" is a list
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_tree(
+                fluor_data.to_numpy(), np.array(classes), fluor_data.columns,
+                num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "features" to be a list of the '
+            'column ids in "x"'
+        )
+
+        # Test that dimensions of "x" and "y" match
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_tree(
+                x, np.array([1, 2, 3]), features, num_repeats, scale, plt_name,
+                True
+            )
+        self.assertEqual(
+            str(message.exception), 'Mismatch between the number of rows in "x"'
+            ' and the number of entries in "y"'
+        )
+
+        # Test that dimensions of "x" and "features" match
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_tree(
+                x, y, fluor_data.columns.tolist()[:2], num_repeats, scale,
+                plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Mismatch between the number of columns in '
+            '"x" and the number of column ids in "features"'
+        )
+
+        # Test "num_repeats" is an integer
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_tree(
+                x, y, features, 1000., scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), '"num_repeats" should be set to a positive '
+            'integer value'
+        )
+
+        # Test "num_repeats" is a positive integer
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_tree(
+                x, y, features, -4, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), '"num_repeats" should be set to a positive '
+            'integer value'
+        )
+
+        # Test "scale" is a Boolean
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_tree(
+                x, y, features, num_repeats, 1, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), '"scale" should be set to a Boolean value'
+        )
+
+        # Test "plt_name" is a string
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_tree(
+                x, y, features, num_repeats, scale, True, True
+            )
+        self.assertEqual(
+            str(message.exception), '"plt_name" should be a string value'
+        )
+
+        # Test tree feature selection
+        exp_importance_df = pd.DataFrame({'Feature': ['Feature_1', 'Feature_2'],
+                                          'Score': [0.554, 0.446]})
+        act_importance_df = test_ml_train.calc_feature_importances_tree(
+            np.array([[2, 2],
+                      [1, 10],
+                      [2, 3],
+                      [1, 1],
+                      [2, 7],
+                      [10, 6],
+                      [7, 2],
+                      [2, 2],
+                      [1, 10],
+                      [10, 6],
+                      [2, 7],
+                      [3, 8]]),
+            np.array(['A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B']),
+            ['Feature_1', 'Feature_2'], 1000, False, '', True
+        )
+        pd.testing.assert_frame_equal(exp_importance_df, act_importance_df, atol=0.01)
+
         # Removes directory created by defining RunML object
-        #shutil.rmtree('tests/Temp_output')
+        shutil.rmtree('tests/Temp_output')
 
     def test_calc_feature_importances_permutation(self):
         """
@@ -1874,8 +2202,214 @@ class TestClass(unittest.TestCase):
 
         print('Testing calc_feature_importances_permutation')
 
+        results_dir = 'tests/Temp_output'
+        fluor_data = pd.DataFrame({'Feature_1': [4, 2, 7, 9],
+                                   'Feature_2': [6, 6, 2, 6],
+                                   'Feature_3': [8, 6, 4, 2]})
+        classes = ['A', 'B', 'B', 'A']
+        subclasses = ['A_1', 'B_1', 'B_2', 'A_2']
+        shuffle = False
+
+        test_ml_train = RunML(
+            results_dir, fluor_data, classes, subclasses, shuffle, True
+        )
+
+        # Defines function arguments
+        from sklearn.ensemble import AdaBoostClassifier
+        x = None
+        y = None
+        features = None
+        classifier = AdaBoostClassifier
+        parameters = {'n_estimators': [10, 30, 100, 300, 1000]}
+        model_metric = 'accuracy'
+        num_repeats = 1000
+        scale = True
+        plt_name = ''
+
+        # Test "x" is a numpy array
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                fluor_data, y, features, classifier, parameters, model_metric,
+                num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "x" to be a (2D) array of '
+            'fluorescence readings'
+        )
+
+        # Test "x" is a 2D array
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                fluor_data.to_numpy().flatten(), y, features, classifier,
+                parameters, model_metric, num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "x" to be a (2D) array of '
+            'fluorescence readings'
+        )
+
+        # Test "y" is a numpy array
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                fluor_data.to_numpy(), classes, features, classifier,
+                parameters, model_metric, num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "y" to be a (1D) array of class '
+            'labels'
+        )
+
+        # Test "y" is a 1D array
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                x, fluor_data.to_numpy(), features, classifier, parameters,
+                model_metric, num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "y" to be a (1D) array of class '
+            'labels'
+        )
+
+        # Test "features" is a list
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                fluor_data.to_numpy(), np.array(classes), fluor_data.columns,
+                classifier, parameters, model_metric, num_repeats, scale,
+                plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "features" to be a list of the '
+            'column ids in "x"'
+        )
+
+        # Test that dimensions of "x" and "y" match
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                x, np.array([1, 2, 3]), features, classifier, parameters,
+                model_metric, num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Mismatch between the number of rows in "x"'
+            ' and the number of entries in "y"'
+        )
+
+        # Test that dimensions of "x" and "features" match
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                x, y, fluor_data.columns.tolist()[:2], classifier, parameters,
+                model_metric, num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Mismatch between the number of columns in '
+            '"x" and the number of column ids in "features"'
+        )
+
+        # Test "parameters" is a dictionary
+        from sklearn.ensemble import RandomForestClassifier
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                x, y, fluor_data.columns.tolist(), RandomForestClassifier, [],
+                model_metric, num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "parameters" to be a dictionary of '
+            'parameter names (keys) and arrays of values to consider for them '
+            '(values) in a grid search'
+        )
+
+        # Test "model_metrics" is a recognised string
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                x, y, fluor_data.columns.tolist(), RandomForestClassifier,
+                OrderedDict(), 'acuracy', num_repeats, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Value provided for "model_metric" not '
+            'recognised - please specify one of the strings in the list below:'
+            '\n[\'accuracy\', \'balanced_accuracy\', \'top_k_accuracy\', '
+            '\'average_precision\', \'neg_brier_score\', \'f1\', \'f1_micro\', '
+            '\'f1_macro\', \'f1_weighted\', \'f1_samples\', \'neg_log_loss\', '
+            '\'precision\', \'precision_micro\', \'precision_macro\', '
+            '\'precision_weighted\', \'precision_samples\', \'recall\', '
+            '\'recall_micro\', \'recall_macro\', \'recall_weighted\', '
+            '\'recall_samples\', \'jaccard\', \'jaccard_micro\', '
+            '\'jaccard_macro\', \'jaccard_weighted\', \'jaccard_samples\', '
+            '\'roc_auc\', \'roc_auc_ovr\', \'roc_auc_ovo\', '
+            '\'roc_auc_ovr_weighted\', \'roc_auc_ovo_weighted\']'
+        )
+
+        # Test "num_repeats" is an integer
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                x, y, fluor_data.columns.tolist(), classifier, OrderedDict(),
+                'precision', 1000., scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), '"num_repeats" should be set to a positive '
+            'integer value'
+        )
+
+        # Test "num_repeats" is a positive integer
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                x, y, fluor_data.columns.tolist(), classifier, OrderedDict(),
+                model_metric, 0, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), '"num_repeats" should be set to a positive '
+            'integer value'
+        )
+
+        # Test "scale" is a Boolean
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                x, y, fluor_data.columns.tolist(), classifier, OrderedDict(),
+                model_metric, num_repeats, 1, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), '"scale" should be set to a Boolean value'
+        )
+
+        # Test "plt_name" is a string
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.calc_feature_importances_permutation(
+                x, y, fluor_data.columns.tolist(), classifier, OrderedDict(),
+                model_metric, num_repeats, False, {}, True
+            )
+        self.assertEqual(
+            str(message.exception), '"plt_name" should be a string value'
+        )
+
+        # Test permutation feature selection
+        from sklearn.svm import SVC
+        svc_params = OrderedDict({
+            'C': np.logspace(-5, 15, num=41, base=2),
+            'gamma': np.logspace(-15, 3, num=37, base=2),
+            'kernel': ['rbf']
+        })
+        exp_importance_df = pd.DataFrame({'Feature': ['Feature_1', 'Feature_2'],
+                                          'Score': [-0.05714286, -0.06666667]})
+        act_importance_df = test_ml_train.calc_feature_importances_permutation(
+            np.array([[2, 2],
+                      [1, 10],
+                      [2, 3],
+                      [1, 1],
+                      [2, 7],
+                      [10, 6],
+                      [7, 2],
+                      [2, 2],
+                      [1, 10],
+                      [10, 6],
+                      [2, 7],
+                      [3, 8]]),
+            np.array([0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1]),
+            ['Feature_1', 'Feature_2'], SVC, svc_params, 'f1', 10, True,
+            '', True
+        )
+        pd.testing.assert_frame_equal(exp_importance_df, act_importance_df)
+
         # Removes directory created by defining RunML object
-        #shutil.rmtree('tests/Temp_output')
+        shutil.rmtree('tests/Temp_output')
 
     def test_run_pca(self):
         """
@@ -1884,8 +2418,76 @@ class TestClass(unittest.TestCase):
 
         print('Testing run_pca')
 
+        results_dir = 'tests/Temp_output'
+        fluor_data = pd.DataFrame({'Feature_1': [4, 2, 7, 9],
+                                   'Feature_2': [6, 6, 2, 6],
+                                   'Feature_3': [8, 6, 4, 2]})
+        classes = ['A', 'B', 'B', 'A']
+        subclasses = ['A_1', 'B_1', 'B_2', 'A_2']
+        shuffle = False
+
+        test_ml_train = RunML(
+            results_dir, fluor_data, classes, subclasses, shuffle, True
+        )
+
+        # Defines function arguments
+        x = None
+        scale = True
+        plt_name = ''
+
+        # Test "x" is a numpy array
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.run_pca(fluor_data, scale, plt_name, True)
+        self.assertEqual(
+            str(message.exception), 'Expect "x" to be a (2D) array of '
+            'fluorescence readings'
+        )
+
+        # Test "x" is a 2D array
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.run_pca(
+                fluor_data.to_numpy().flatten(), scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "x" to be a (2D) array of '
+            'fluorescence readings'
+        )
+
+        # Test "scale" is a Boolean
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.run_pca(x, 1, plt_name, True)
+        self.assertEqual(
+            str(message.exception), '"scale" should be set to a Boolean value'
+        )
+
+        # Test "plt_name" is a string
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.run_pca(x, False, [], True)
+        self.assertEqual(
+            str(message.exception), '"plt_name" should be a string value'
+        )
+
+        # Test PCA calculation
+        act_model = test_ml_train.run_pca(fluor_data.to_numpy(), True, '', True)
+
+        # These values are for fitting the PCA to the unscaled data (because
+        # transformation of the data is not carried out in run_pca)
+        exp_transform_x = np.array(
+            [[-3.18109341, -0.22506071,  1.44221788],
+             [-3.49530274, -0.42244343, -1.36176368],
+             [ 2.37050586,  2.57343631, -0.09015284],
+             [ 4.30589029, -1.92593218,  0.00969865]]
+        )
+        np.testing.assert_almost_equal(
+            exp_transform_x, act_model.fit_transform(fluor_data.to_numpy()), 7
+        )
+        np.testing.assert_almost_equal(
+            np.array([0.76223747, 0.17312951, 0.06463302]),
+            act_model.explained_variance_ratio_, 7
+        )
+
         # Removes directory created by defining RunML object
-        #shutil.rmtree('tests/Temp_output')
+        shutil.rmtree('tests/Temp_output')
 
     def test_plot_scatter_on_pca_axes(self):
         """
@@ -1894,8 +2496,219 @@ class TestClass(unittest.TestCase):
 
         print('Testing plot_scatter_on_pca_axes')
 
+        results_dir = 'tests/Temp_output'
+        fluor_data = pd.DataFrame({'Feature_1': [4, 2, 7, 9],
+                                   'Feature_2': [6, 6, 2, 6],
+                                   'Feature_3': [8, 6, 4, 2]})
+        classes = ['A', 'B', 'B', 'A']
+        subclasses = ['A_1', 'B_1', 'B_2', 'A_3']
+        shuffle = False
+
+        test_ml_train = RunML(
+            results_dir, fluor_data, classes, subclasses, shuffle, True
+        )
+
+        # Defines function arguments
+        x = None
+        y = None
+        sub_list = None
+        num_dimensions = 2
+        scale = True
+        plt_name = ''
+
+        # Test "x" is a numpy array
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.plot_scatter_on_pca_axes(
+                fluor_data, y, sub_list, num_dimensions, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "x" to be a (2D) array of '
+            'fluorescence readings'
+        )
+
+        # Test "x" is a 2D array
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.plot_scatter_on_pca_axes(
+                fluor_data.to_numpy().flatten(), y, sub_list, num_dimensions,
+                scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "x" to be a (2D) array of '
+            'fluorescence readings'
+        )
+
+        # Test "y" is a numpy array
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.plot_scatter_on_pca_axes(
+                fluor_data.to_numpy(), classes, sub_list, num_dimensions, scale,
+                plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "y" to be a (1D) array of class '
+            'labels'
+        )
+
+        # Test "y" is a 1D array
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.plot_scatter_on_pca_axes(
+                x, fluor_data.to_numpy(), sub_list, num_dimensions, scale,
+                plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "y" to be a (1D) array of class '
+            'labels'
+        )
+
+        # Test "subclasses" is a numpy array
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.plot_scatter_on_pca_axes(
+                x, fluor_data.to_numpy().flatten()[:4], subclasses,
+                num_dimensions, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "subclasses" to be set either to '
+            'None, or to a (1D) array of the subclasses present in the dataset'
+        )
+
+        # Test "subclasses" is a 1D array
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.plot_scatter_on_pca_axes(
+                x, np.array(classes), fluor_data.to_numpy(), num_dimensions,
+                scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "subclasses" to be set either to '
+            'None, or to a (1D) array of the subclasses present in the dataset'
+        )
+
+        # Test that dimensions of "x" and "y" match
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.plot_scatter_on_pca_axes(
+                x, np.array([1, 2, 3]), np.array(subclasses), num_dimensions,
+                scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Mismatch between the number of rows in "x"'
+            ' and the number of entries in "y"'
+        )
+
+        # Test that dimensions of "x" and "subclasses" match
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.plot_scatter_on_pca_axes(
+                x, y, np.array([1, 2, 3]), num_dimensions, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Mismatch between the number of rows in "x"'
+            ' and the number of entries in "subclasses"'
+        )
+
+        # Test "num_dimensions" is equal to 2 or 3
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.plot_scatter_on_pca_axes(
+                x, y, sub_list, 4, scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "num_dimensions" to be set to 2 or 3'
+        )
+
+        # Test "scale" is a Boolean
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.plot_scatter_on_pca_axes(
+                x, y, sub_list, 3, '', plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), '"scale" should be a Boolean (True or False)'
+        )
+
+        # Test "plt_name" is a string
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.plot_scatter_on_pca_axes(
+                x, y, sub_list, num_dimensions, scale, [], True
+            )
+        self.assertEqual(
+            str(message.exception), '"plt_name" should be a string value'
+        )
+
+        # Test subclasses contain '_' character only once
+        with self.assertRaises(ValueError) as message:
+            test_ml_train.plot_scatter_on_pca_axes(
+                x, y, np.array(['A_1', 'B_1_', 'B_2', 'A_2_2']), num_dimensions,
+                scale, plt_name, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Character "_" found in subclass A_2_2 '
+            'more/less than once'
+        )
+
+        # Test function with defined subclasses
+        exp_cat_class_colours = {'A': 'b',
+                                 'B': 'g'}
+        exp_cat_markers = {'A_1': 'o',
+                           'A_3': 'v',
+                           'B_1': 'o',
+                           'B_2': 'v'}
+        exp_cat_colours = {'A_1': 'b',
+                           'A_3': 'b',
+                           'B_1': 'g',
+                           'B_2': 'g'}
+        exp_X_reduced = np.array(
+            [[-1.18870441, -0.758145263],
+             [-1.16720749, -0.579369555],
+             [3.03636219, -0.179547060],
+             [-0.680450290, 1.51706188]]
+        )
+
+        (
+            act_cat_class_colours, act_cat_markers, act_cat_colours,
+            act_X_reduced
+        ) = test_ml_train.plot_scatter_on_pca_axes(
+            x, y, sub_list, num_dimensions, scale, plt_name, True
+        )
+        self.assertEqual(exp_cat_class_colours, act_cat_class_colours)
+        self.assertEqual(exp_cat_markers, act_cat_markers)
+        self.assertEqual(exp_cat_colours, act_cat_colours)
+        np.testing.assert_almost_equal(exp_X_reduced, act_X_reduced)
+
+        # Test function with no subclasses
+        shutil.rmtree('tests/Temp_output')
+        results_dir = 'tests/Temp_output'
+        fluor_data = pd.DataFrame({'Feature_1': [4, 2, 7, 9],
+                                   'Feature_2': [6, 6, 2, 6],
+                                   'Feature_3': [8, 6, 4, 2]})
+        classes = ['A', 'B', 'B', 'A']
+        subclasses = None
+        shuffle = False
+
+        test_ml_train = RunML(
+            results_dir, fluor_data, classes, subclasses, shuffle, True
+        )
+
+        exp_cat_class_colours = {'A': 'b',
+                                 'B': 'g'}
+        exp_cat_markers = {'A': 'o',
+                           'B': 'o'}
+        exp_cat_colours = {'A': 'b',
+                           'B': 'g'}
+        exp_X_reduced = np.array(
+            [[-3.18109341, -0.22506071, 1.44221788],
+             [-3.49530274, -0.42244343, -1.36176368],
+             [2.37050586, 2.57343631, -0.09015284],
+             [4.30589029, -1.92593218, 0.00969865]]
+        )
+
+        (
+            act_cat_class_colours, act_cat_markers, act_cat_colours,
+            act_X_reduced
+        ) = test_ml_train.plot_scatter_on_pca_axes(
+            x, y, sub_list, 3, False, plt_name, True
+        )
+        self.assertEqual(exp_cat_class_colours, act_cat_class_colours)
+        self.assertEqual(exp_cat_markers, act_cat_markers)
+        self.assertEqual(exp_cat_colours, act_cat_colours)
+        np.testing.assert_almost_equal(exp_X_reduced, act_X_reduced)
+
         # Removes directory created by defining RunML object
-        #shutil.rmtree('tests/Temp_output')
+        shutil.rmtree('tests/Temp_output')
 
     def test_define_fixed_model_params(self):
         """
