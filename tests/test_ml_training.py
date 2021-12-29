@@ -453,7 +453,7 @@ class TestClass(unittest.TestCase):
         x_test = np.array([])
         y_test = np.array([])
         selected_features = []
-        splits = create_generator(x_train.shape[0])
+        splits = [(y_train, np.array([]))]
         resampling_method = 'no_balancing'
         n_components_pca = None
         run = 'randomsearch'
@@ -849,30 +849,39 @@ class TestClass(unittest.TestCase):
         )
 
         # Tests splits type
-        splits_list = []
-        with self.assertRaises(TypeError) as message: check_arguments(
-            'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits_list, resampling_method, n_components_pca,
-            run, fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
-        )
-        self.assertEqual(
-            str(message.exception), 'Expect "splits" to be a generator that '
-            'creates train test splits'
-        )
-
-        # Tests generator creates splits of the expected size
         x_train_array = np.array([[1, 1], [1, 1], [1, 1], [1, 1]])
         y_train_array = np.array([2, 2, 2, 2])
         train_groups_array = np.array([3, 3, 3, 3])
         x_test_array = np.array([[4, 4], [4, 4]])
         y_test_array = np.array([5, 5])
         selected_features_list = ['X', 'X']
-        splits_gen = create_generator(x_train_array.shape[0]+1)
-        with self.assertRaises(ValueError) as message: check_arguments(
+        splits_gen = create_generator(x_train_array.shape[0])
+        with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
             x_test_array, y_test_array, selected_features_list, splits_gen,
+            resampling_method, n_components_pca, run, fixed_params,
+            tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
+        )
+        self.assertEqual(
+            str(message.exception), 'Expect "splits" to be a list of train/test'
+            ' splits'
+        )
+
+        # Tests splits list matches dimensions of x_train
+        x_train_array = np.array([[1, 1], [1, 1], [1, 1], [1, 1]])
+        y_train_array = np.array([2, 2, 2, 2])
+        train_groups_array = np.array([3, 3, 3, 3])
+        x_test_array = np.array([[4, 4], [4, 4]])
+        y_test_array = np.array([5, 5])
+        selected_features_list = ['X', 'X']
+        splits_list = [(np.array([6, 6, 6]), np.array([6])),
+                       (np.array([]), np.array([6, 6, 6, 6])),
+                       (np.array([6]), np.array([6, 6, 6, 6]))]
+        with self.assertRaises(ValueError) as message: check_arguments(
+            'PlaceHolder', x_train_array, y_train_array, train_groups_array,
+            x_test_array, y_test_array, selected_features_list, splits_list,
             resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -922,11 +931,13 @@ class TestClass(unittest.TestCase):
         x_test_array = np.array([[4, 4], [4, 4]])
         y_test_array = np.array([5, 5])
         selected_features_list = ['X', 'X']
-        splits_gen = create_generator(x_train_array.shape[0])
+        splits_list = [(np.array([6, 6, 6]), np.array([6])),
+                       (np.array([]), np.array([6, 6, 6, 6])),
+                       (np.array([6]), np.array([6, 6, 6]))]
         n_components_pca_int = x_train_array.shape[1] + 1
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
-            x_test_array, y_test_array, selected_features_list, splits_gen,
+            x_test_array, y_test_array, selected_features_list, splits_list,
             resampling_method, n_components_pca_int, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -946,12 +957,14 @@ class TestClass(unittest.TestCase):
         x_test_array = np.array([[4, 4], [4, 4]])
         y_test_array = np.array([5, 5])
         selected_features_list = ['X', 'X']
-        splits_gen = create_generator(x_train_array.shape[0])
+        splits_list = [(np.array([]), np.array([])),
+                       (np.array([]), np.array([])),
+                       (np.array([]), np.array([]))]
         n_components_pca_int = x_test_array.shape[1]
         run_str = 'random search'
         with self.assertRaises(ValueError) as message: check_arguments(
             'run_ml', x_train_array, y_train_array, train_groups_array,
-            x_test_array, y_test_array, selected_features_list, splits_gen,
+            x_test_array, y_test_array, selected_features_list, splits_list,
             resampling_method, n_components_pca_int, run_str, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -999,14 +1012,16 @@ class TestClass(unittest.TestCase):
         x_test_array = np.array([[4, 4], [4, 4]])
         y_test_array = np.array([5, 5])
         selected_features_list = ['X', 'X']
-        splits_gen = create_generator(x_train_array.shape[0])
+        splits_list = [(np.array([6, 6, 6]), np.array([6])),
+                       (np.array([]), np.array([6, 6, 6, 6])),
+                       (np.array([6]), np.array([6, 6, 6]))]
         n_components_pca_int = x_train_array.shape[1]
         run_str = 'train'
         fixed_params_dict = {'dual': False}
         tuned_params_list = []
         with self.assertRaises(TypeError) as message: check_arguments(
             'run_ml', x_train_array, y_train_array, train_groups_array,
-            x_test_array, y_test_array, selected_features_list, splits_gen,
+            x_test_array, y_test_array, selected_features_list, splits_list,
             resampling_method, n_components_pca_int, run_str, fixed_params_dict,
             tuned_params_list, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -1048,13 +1063,14 @@ class TestClass(unittest.TestCase):
 
         # Test test_scoring_funcs is a dictionary of scoring functions (keys)
         # and dictionaries of parameter values to run these functions with
-        from sklearn.metrics import accuracy_score, jaccard_score
+        from sklearn.metrics import accuracy_score, jaccard_score, make_scorer
+        train_scoring_metric_func = make_scorer(accuracy_score)
         test_scoring_funcs_dict = {accuracy_score: {'normalize': True},
                                    jaccard_score: {'average': 'weighted'}}
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
             selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
+            fixed_params, tuned_params, train_scoring_metric_func,
             test_scoring_funcs_dict, n_iter, cv_folds_inner_loop,
             cv_folds_outer_loop, draw_conf_mat, plt_name, True
         )
@@ -1201,7 +1217,7 @@ class TestClass(unittest.TestCase):
         x_test_ext = np.array([[4, 4, 4, 4]])
         y_test_ext = np.array([5])
         selected_features_ext = ['A', 'C', 'B']
-        splits_ext = create_generator(x_train_ext.shape[0])
+        splits_ext = [(np.array([6, 6, 6, 6, 6]), np.array([]))]
         resampling_method_ext = 'smote'
         n_components_pca_ext = 4
         run_ext = 'train'
@@ -3071,8 +3087,164 @@ class TestClass(unittest.TestCase):
 
         print('Testing run_randomised_search')
 
+        results_dir = 'tests/Temp_output'
+        fluor_data = pd.DataFrame({
+            'Feature_1': [5, 9, 8, 1, 3, 5, 10, 6, 7, 1, 8, 9, 1, 10, 2, 2, 8,
+                          7, 1, 3, 8, 4, 3, 4, 4, 6, 2, 10, 4, 5, 1, 7, 10, 3,
+                          10, 6, 3, 8, 1, 4, 6, 1, 5, 2, 2, 1, 7, 1, 2, 4],
+            'Feature_2': [9, 9, 7, 9, 6, 4, 7, 4, 2, 9, 7, 9, 7, 6, 4, 10, 8, 1,
+                          5, 4, 3, 3, 4, 3, 1, 4, 9, 6, 7, 10, 4, 6, 9, 2, 7, 4,
+                          3, 5, 7, 10, 1, 5, 3, 7, 2, 5, 10, 2, 2, 5],
+            'Feature_3': [5, 4, 8, 10, 3, 2, 10, 5, 1, 10, 5, 5, 5, 10, 7, 1, 8,
+                          8, 2, 1, 10, 9, 10, 6, 7, 4, 3, 3, 10, 10, 4, 7, 4, 6,
+                          10, 7, 6, 9, 4, 9, 9, 4, 4, 5, 10, 2, 10, 1, 7, 10]
+        })
+        classes = [
+            'A', 'B', 'B', 'A', 'B', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'B',
+            'A', 'A', 'A', 'B', 'B', 'A', 'B', 'A', 'B', 'A', 'A', 'A', 'A',
+            'A', 'A', 'B', 'A', 'A', 'A', 'B', 'A', 'B', 'A', 'B', 'B', 'A',
+            'A', 'B', 'B', 'B', 'A', 'A', 'A', 'B', 'B', 'B', 'B'
+        ]
+        subclasses = [
+            'A_1', 'B_2', 'B_1', 'A_2', 'B_1', 'B_2', 'A_2', 'A_1', 'B_1',
+            'A_1', 'A_2', 'B_1', 'B_2', 'A_1', 'A_1', 'A_2', 'B_2', 'B_1',
+            'A_1', 'B_2', 'A_2', 'B_2', 'A_2', 'A_2', 'A_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'A_1', 'A_2', 'A_1', 'B_2', 'A_1', 'B_1', 'A_2',
+            'B_2', 'B_2', 'A_1', 'A_1', 'B_1', 'B_1', 'B_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'B_2', 'B_1', 'B_1'
+        ]
+        shuffle = False
+
+        test_ml_train = RunML(
+            results_dir, fluor_data, classes, subclasses, shuffle, True
+        )
+
+        # Define function arguments
+        from sklearn.ensemble import AdaBoostClassifier
+        from sklearn.model_selection import GroupKFold
+
+        parameters = {'n_estimators': [3, 10, 30, 100, 300, 1000]}
+        splits = list(GroupKFold(n_splits=2).split(
+            X=test_ml_train.x, y=test_ml_train.y,
+            groups=test_ml_train.sub_classes
+        ))
+
+        # Test random search with PCA
+        exp_search_results = {
+            'params': [{'AdaBoostClassifier__n_estimators': 30},
+                       {'AdaBoostClassifier__n_estimators': 10},
+                       {'AdaBoostClassifier__n_estimators': 300},
+                       {'AdaBoostClassifier__n_estimators': 3}],
+            'split0_test_score': np.array([0.68, 0.68, 0.68, 0.64]),
+            'split1_test_score': np.array([0.68, 0.68, 0.6, 0.64]),
+            'mean_test_score': np.array([0.68, 0.68, 0.64, 0.64]),
+            'std_test_score': np.array([0., 0., 0.04, 0.]),
+            'rank_test_score': np.array([1, 1, 3, 3], dtype=np.int32)
+        }
+        exp_best_params = {'AdaBoostClassifier__n_estimators': 30}
+
+        act_random_search = test_ml_train.run_randomised_search(
+            test_ml_train.x, test_ml_train.y, test_ml_train.sub_classes,
+            ['Feature_1', 'Feature_3'], AdaBoostClassifier(random_state=1),
+            splits, 'smote', 1, parameters, 'accuracy', 4, True
+        )
+        act_search_results = act_random_search.cv_results_
+        for key in [
+            'mean_fit_time', 'std_fit_time', 'mean_score_time',
+            'std_score_time', 'param_AdaBoostClassifier__n_estimators'
+        ]:
+            del(act_search_results[key])
+        act_best_params = act_random_search.best_params_
+
+        self.assertEqual(list(exp_search_results.keys()),
+                         list(act_search_results.keys()))
+        for key in exp_search_results.keys():
+            if type(exp_search_results[key]) in [np.ndarray, np.ma.core.MaskedArray]:
+                np.testing.assert_almost_equal(
+                    exp_search_results[key], act_search_results[key], 7
+                )
+            else:
+                self.assertEqual(
+                    exp_search_results[key], act_search_results[key]
+                )
+        self.assertEqual(exp_best_params, act_best_params)
+
+        # Test random search without PCA
+        from sklearn.svm import LinearSVC
+        from sklearn.model_selection import StratifiedKFold
+        from sklearn.metrics import f1_score, make_scorer
+
+        parameters = {'C': np.logspace(-3, 5, num=9, base=10)}
+        splits = list(StratifiedKFold(n_splits=4, shuffle=True, random_state=1).split(
+            X=test_ml_train.x, y=test_ml_train.y, groups=test_ml_train.sub_classes
+        ))
+        scoring_metric = make_scorer(f1_score, average='binary', pos_label='A')
+
+        exp_search_results = {
+            'params': [{'LinearSVC__C': 0.001},
+                       {'LinearSVC__C': 0.01},
+                       {'LinearSVC__C': 0.1},
+                       {'LinearSVC__C': 1.0},
+                       {'LinearSVC__C': 10.0},
+                       {'LinearSVC__C': 100.0},
+                       {'LinearSVC__C': 1000.0},
+                       {'LinearSVC__C': 10000.0},
+                       {'LinearSVC__C': 100000.0}],
+            'split0_test_score': np.array([
+                0.66666667, 0.66666667, 0.66666667, 0.66666667, 0.66666667,
+                0.66666667, 0.66666667, 0.66666667, 0.66666667
+            ]),
+            'split1_test_score': np.array([
+                0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5
+            ]),
+            'split2_test_score': np.array([
+                0.33333333, 0.33333333, 0.57142857, 0.57142857, 0.57142857,
+                0.57142857, 0.57142857, 0.57142857, 0.57142857
+            ]),
+            'split3_test_score': np.array([
+                0.44444444, 0.44444444, 0.6, 0.54545455, 0.54545455, 0.54545455,
+                0.54545455, 0.54545455, 0.54545455
+            ]),
+            'mean_test_score': np.array([
+                0.48611111, 0.48611111, 0.58452381, 0.57088745, 0.57088745,
+                0.57088745, 0.57088745, 0.57088745, 0.57088745
+            ]),
+            'std_test_score': np.array([
+                0.12028131, 0.12028131, 0.05979699, 0.0609217, 0.0609217,
+                0.0609217, 0.0609217, 0.0609217, 0.0609217
+            ]),
+            'rank_test_score': np.array([8, 8, 1, 2, 2, 2, 2, 2, 2], dtype=np.int32)
+        }
+        exp_best_params = {'LinearSVC__C': 0.1}
+
+        act_random_search = test_ml_train.run_randomised_search(
+            test_ml_train.x, test_ml_train.y, None, ['Feature_1', 'Feature_2'],
+            LinearSVC(dual=False, random_state=1), splits, 'max_sampling', None,
+            parameters, scoring_metric, None, True
+        )
+        act_search_results = act_random_search.cv_results_
+        for key in [
+            'mean_fit_time', 'std_fit_time', 'mean_score_time',
+            'std_score_time', 'param_LinearSVC__C'
+        ]:
+            del(act_search_results[key])
+        act_best_params = act_random_search.best_params_
+
+        self.assertEqual(list(exp_search_results.keys()),
+                         list(act_search_results.keys()))
+        for key in exp_search_results.keys():
+            if type(exp_search_results[key]) in [np.ndarray, np.ma.core.MaskedArray]:
+                np.testing.assert_almost_equal(
+                    exp_search_results[key], act_search_results[key], 7
+                )
+            else:
+                self.assertEqual(
+                    exp_search_results[key], act_search_results[key]
+                )
+        self.assertEqual(exp_best_params, act_best_params)
+
         # Removes directory created by defining RunML object
-        #shutil.rmtree('tests/Temp_output')
+        shutil.rmtree('tests/Temp_output')
 
     def test_run_grid_search(self):
         """
