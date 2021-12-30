@@ -2457,7 +2457,8 @@ class RunML(DefData):
         Input
         ----------
         - clf: Selected classifier from the sklearn package,
-        e.g. sklearn.svm.LinearSVC('dual'=False)
+        e.g. sklearn.svm.LinearSVC('dual'=False) (for run='randomsearch' or
+        run='gridsearch'), or sklearn.svm.SVC (for run='train')
         - x_train: Numpy array of x values of training data
         - y_train: Numpy array of y values of training data
         - train_groups: Numpy array of group names of training data
@@ -2928,8 +2929,14 @@ class RunML(DefData):
             n_components_pca_2, test
         )
 
-        F, p = combined_ftest_5x2cv(
-            estimator1=trained_clf_1, estimator2=trained_clf_2, X=x, y=y
-        )
+        if test is False:
+            F, p = combined_ftest_5x2cv(
+                estimator1=trained_clf_1, estimator2=trained_clf_2, X=x, y=y
+            )
+        else:
+            F, p = combined_ftest_5x2cv(
+                estimator1=trained_clf_1, estimator2=trained_clf_2, X=x, y=y,
+                random_seed=1
+            )
 
         return F, p

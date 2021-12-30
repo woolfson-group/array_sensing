@@ -2051,7 +2051,6 @@ class TestClass(unittest.TestCase):
         Tests calc_feature_importances_tree in train.py
         """
 
-        """
         print('Testing calc_feature_importances_tree')
 
         results_dir = 'tests/Temp_output'
@@ -2211,14 +2210,12 @@ class TestClass(unittest.TestCase):
 
         # Removes directory created by defining RunML object
         shutil.rmtree('tests/Temp_output')
-        """
 
     def test_calc_feature_importances_permutation(self):
         """
         Tests calc_feature_importances_permutation in train.py
         """
 
-        """
         print('Testing calc_feature_importances_permutation')
 
         results_dir = 'tests/Temp_output'
@@ -2429,7 +2426,6 @@ class TestClass(unittest.TestCase):
 
         # Removes directory created by defining RunML object
         shutil.rmtree('tests/Temp_output')
-        """
 
     def test_run_pca(self):
         """
@@ -3782,5 +3778,54 @@ class TestClass(unittest.TestCase):
 
         print('Testing run_5x2_CV_paired_t_test')
 
+        results_dir = 'tests/Temp_output'
+        x_train = pd.DataFrame({
+            'Feature_1': [5, 9, 8, 1, 3, 5, 10, 6, 7, 1, 8, 9, 1, 10, 2, 2, 8,
+                          7, 1, 3, 8, 4, 3, 4, 4, 6, 2, 10, 4, 5, 1, 7, 10, 3,
+                          10, 6, 3, 8, 1, 4, 6, 1, 5, 2, 2, 1, 7, 1, 2, 4],
+            'Feature_2': [9, 9, 7, 9, 6, 4, 7, 4, 2, 9, 7, 9, 7, 6, 4, 10, 8, 1,
+                          5, 4, 3, 3, 4, 3, 1, 4, 9, 6, 7, 10, 4, 6, 9, 2, 7, 4,
+                          3, 5, 7, 10, 1, 5, 3, 7, 2, 5, 10, 2, 2, 5],
+            'Feature_3': [5, 4, 8, 10, 3, 2, 10, 5, 1, 10, 5, 5, 5, 10, 7, 1, 8,
+                          8, 2, 1, 10, 9, 10, 6, 7, 4, 3, 3, 10, 10, 4, 7, 4, 6,
+                          10, 7, 6, 9, 4, 9, 9, 4, 4, 5, 10, 2, 10, 1, 7, 10]
+        })
+        y_train = [
+            'A', 'B', 'B', 'A', 'B', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'B',
+            'A', 'A', 'A', 'B', 'B', 'A', 'B', 'A', 'B', 'A', 'A', 'A', 'A',
+            'A', 'A', 'B', 'A', 'A', 'A', 'B', 'A', 'B', 'A', 'B', 'B', 'A',
+            'A', 'B', 'B', 'B', 'A', 'A', 'A', 'B', 'B', 'B', 'B'
+        ]
+        y_groups = [
+            'A_1', 'B_2', 'B_1', 'A_2', 'B_1', 'B_2', 'A_2', 'A_1', 'B_1',
+            'A_1', 'A_2', 'B_1', 'B_2', 'A_1', 'A_1', 'A_2', 'B_2', 'B_1',
+            'A_1', 'B_2', 'A_2', 'B_2', 'A_2', 'A_2', 'A_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'A_1', 'A_2', 'A_1', 'B_2', 'A_1', 'B_1', 'A_2',
+            'B_2', 'B_2', 'A_1', 'A_1', 'B_1', 'B_1', 'B_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'B_2', 'B_1', 'B_1'
+        ]
+        shuffle = False
+
+        test_ml_train = RunML(
+            results_dir, x_train, y_train, y_groups, shuffle, True
+        )
+
+        # Define function arguments
+        from sklearn.svm import SVC
+        from sklearn.ensemble import RandomForestClassifier
+
+        # Test arguments
+        exp_F = 0.7999999999999998
+        exp_p = 0.6439069510127531
+        act_F, act_p = test_ml_train.run_5x2_CV_paired_t_test(
+            x_train.to_numpy()[0:40,:], np.array(y_train)[0:40],
+            ['Feature_2', 'Feature_3'], ['Feature_2', 'Feature_3'], SVC,
+            RandomForestClassifier, {'C': 10, 'gamma': 0.01, 'random_state': 1},
+            {'n_estimators': 250, 'min_samples_split': 5, 'min_samples_leaf': 2,
+             'random_state': 1}, 'max_sampling', 'no_balancing', 2, None, True
+        )
+        np.testing.assert_almost_equal(exp_F, act_F, 7)
+        np.testing.assert_almost_equal(exp_p, act_p, 7)
+
         # Removes directory created by defining RunML object
-        #shutil.rmtree('tests/Temp_output')
+        shutil.rmtree('tests/Temp_output')
