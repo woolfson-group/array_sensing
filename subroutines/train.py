@@ -583,7 +583,7 @@ def check_arguments(
         accuracy_score, f1_score, precision_score, recall_score,
         roc_auc_score, cohen_kappa_score
     ]
-    for scoring_func in test_scoring_funcs.keys():
+    for scoring_func, scoring_params in test_scoring_funcs.items():
         if not scoring_func in exp_test_scoring_funcs:
             raise ValueError(
                 'Scoring function {} not recognised.\nExpect scoring functions '
@@ -593,6 +593,8 @@ def check_arguments(
                     [scoring_func.__name__ for scoring_func in exp_test_scoring_funcs]
                 )
             )
+        if not type(scoring_params) in [dict, OrderedDict]:
+            raise TypeError('Expect scoring parameters to be a dictionary')
 
     if not n_iter is None:
         if type(n_iter) != int:
@@ -2253,7 +2255,7 @@ class RunML(DefData):
 
     def train_model(
         self, x_train, y_train, selected_features, clf, resampling_method,
-        n_components_pca, scoring_metric, test=False
+        n_components_pca, test=False
     ):
         """
         Trains user-specified model on the training data (without cross-
@@ -2277,10 +2279,6 @@ class RunML(DefData):
         - n_components_pca: The number of components to transform the data to
         after fitting the data with PCA. If set to None, PCA will not be
         included in the pipeline.
-        - scoring_metric: Name of the scoring metric used to measure the
-        performance of the fitted classifier. Metric must be a string and be one
-        of the scoring metrics for classifiers listed at
-        https://scikit-learn.org/stable/modules/model_evaluation.html#scoring-parameter).
         - test: Boolean describing whether the function is being run during the
         program's unit tests - by default is set to False
 
@@ -2301,7 +2299,7 @@ class RunML(DefData):
             selected_features=selected_features, splits=[(y_train, np.array([]))],
             resampling_method=resampling_method,
             n_components_pca=n_components_pca, run='train', fixed_params={},
-            tuned_params={}, train_scoring_metric=scoring_metric,
+            tuned_params={}, train_scoring_metric='accuracy',
             test_scoring_funcs={}, n_iter=None, cv_folds_inner_loop=5,
             cv_folds_outer_loop='loocv', draw_conf_mat=True, plt_name='',
             test=test
@@ -2334,6 +2332,7 @@ class RunML(DefData):
                                     (type(clf).__name__, clf)])
 
         # Fits single model on all training data
+        # (No need for train_groups as only required for generating CV splits.)
         std_pca_clf.fit(X=x_train, y=y_train)
 
         return std_pca_clf
@@ -2379,7 +2378,7 @@ class RunML(DefData):
         check_arguments(
             func_name='test_model', x_train=np.array([]), y_train=np.array([]),
             train_groups=None, x_test=x_test, y_test=y_test,
-            selected_features=[], splits=[(y_train, np.array([]))],
+            selected_features=[], splits=[(np.array([]), np.array([]))],
             resampling_method='no_balancing', n_components_pca=None,
             run='randomsearch', fixed_params={}, tuned_params={},
             train_scoring_metric='accuracy',
@@ -2409,10 +2408,9 @@ class RunML(DefData):
             test_score = func(**params)
             test_scores[func.__name__.replace('_score', '')] = test_score
 
-
         # Generates confusion matrices
         if draw_conf_mat is True:
-            normalisation_methods = OrderedDict({None: '',
+            normalisation_methods = OrderedDict({None: [''],
                                                  'true': ['_recall', 'rows'],
                                                  'pred': ['_precision', 'columns']})
             for method, method_label in normalisation_methods.items():
@@ -2448,7 +2446,7 @@ class RunML(DefData):
     def run_ml(
         self, clf, x_train, y_train, train_groups, x_test, y_test,
         selected_features, splits, resampling_method, n_components_pca, run,
-        params, train_scoring_metric, test_scoring_funcs=None, n_iter=None,
+        params, train_scoring_metric, test_scoring_funcs={}, n_iter=None,
         cv_folds=5, draw_conf_mat=True, plt_name='', test=False
     ):
         """
@@ -2554,14 +2552,14 @@ class RunML(DefData):
                     'The number of k-folds must be smaller than the number of '
                     'data points in the training dataset'
                 )
-            if x_test.size > 0 and cv_folds > x_test.shape[0]:
-                raise ValueError(
-                    'The number of k-folds must be smaller than the number of '
-                    'data points in the testing dataset'
-                )
 
             if train_groups is None:
-                skf = StratifiedKFold(n_splits=cv_folds, shuffle=True)
+                if test is False:
+                    skf = StratifiedKFold(n_splits=cv_folds, shuffle=True)
+                else:
+                    skf = StratifiedKFold(
+                        n_splits=cv_folds, shuffle=True, random_state=1
+                    )
                 splits = list(skf.split(X=x_train, y=y_train))
             else:
                 gkf = GroupKFold(n_splits=cv_folds)
@@ -2584,15 +2582,16 @@ class RunML(DefData):
             return search
 
         elif run == 'train':
-            trained_clf = self.train_model(
-                x_train, y_train, selected_features, clf, resampling_method,
-                n_components_pca, train_scoring_metric, test
+            train_clf = clf(**params)
+            train_clf = self.train_model(
+                x_train, y_train, selected_features, train_clf,
+                resampling_method, n_components_pca, test
             )
             predictions, test_scores = self.test_model(
-                x_test, y_test, trained_clf, test_scoring_funcs, draw_conf_mat,
+                x_test, y_test, train_clf, test_scoring_funcs, draw_conf_mat,
                 plt_name, test
             )
-            return trained_clf, predictions, test_scores
+            return train_clf, predictions, test_scores
 
     def run_nested_CV(
         self, clf, x, y, groups, selected_features, inner_splits, outer_splits,
@@ -2840,8 +2839,7 @@ class RunML(DefData):
     def run_5x2_CV_paired_t_test(
         self, x, y, selected_features_1, selected_features_2,
         classifier_1, classifier_2, params_1, params_2, resampling_method_1,
-        resampling_method_2, n_components_pca_1, n_components_pca_2,
-        scoring_metric, test=False
+        resampling_method_2, n_components_pca_1, n_components_pca_2, test=False
     ):
         """
         Runs 5x2 CV combined F test to calculate whether there is a significant
@@ -2884,10 +2882,6 @@ class RunML(DefData):
         - n_components_pca_2: The number of components to transform the data to
         after fitting the data with PCA for classifier 2. If set to None, PCA
         will not be included in the pipeline.
-        - scoring_metric: Name of the scoring metric used to measure the
-        performance of the fitted classifier. Metric must be a string and be one
-        of the scoring metrics for classifiers listed at
-        https://scikit-learn.org/stable/modules/model_evaluation.html#scoring-parameter).
         - test: Boolean describing whether the function is being run during the
         program's unit tests - by default is set to False
 
@@ -2907,8 +2901,7 @@ class RunML(DefData):
             splits=[(y, np.array([]))], resampling_method=resampling_method_1,
             n_components_pca=n_components_pca_1, run='randomsearch',
             fixed_params=params_1, tuned_params={},
-            train_scoring_metric=scoring_metric,
-            test_scoring_funcs={}, n_iter=None,
+            train_scoring_metric='accuracy', test_scoring_funcs={}, n_iter=None,
             cv_folds_inner_loop=5, cv_folds_outer_loop='loocv',
             draw_conf_mat=True, plt_name='', test=test
         )
@@ -2919,8 +2912,7 @@ class RunML(DefData):
             splits=[(y, np.array([]))], resampling_method=resampling_method_2,
             n_components_pca=n_components_pca_2, run='randomsearch',
             fixed_params=params_2, tuned_params={},
-            train_scoring_metric=scoring_metric,
-            test_scoring_funcs={}, n_iter=None,
+            train_scoring_metric='accuracy', test_scoring_funcs={}, n_iter=None,
             cv_folds_inner_loop=5, cv_folds_outer_loop='loocv',
             draw_conf_mat=True, plt_name='', test=test
         )
@@ -2928,12 +2920,12 @@ class RunML(DefData):
         clf_1 = classifier_1(**params_1)
         trained_clf_1 = self.train_model(
             x, y, selected_features_1, clf_1, resampling_method_1,
-            n_components_pca_1, scoring_metric, test
+            n_components_pca_1, test
         )
         clf_2 = classifier_2(**params_2)
         trained_clf_2 = self.train_model(
             x, y, selected_features_2, clf_2, resampling_method_2,
-            n_components_pca_2, scoring_metric, test
+            n_components_pca_2, test
         )
 
         F, p = combined_ftest_5x2cv(

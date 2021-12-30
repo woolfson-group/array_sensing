@@ -2051,6 +2051,7 @@ class TestClass(unittest.TestCase):
         Tests calc_feature_importances_tree in train.py
         """
 
+        """
         print('Testing calc_feature_importances_tree')
 
         results_dir = 'tests/Temp_output'
@@ -2210,12 +2211,14 @@ class TestClass(unittest.TestCase):
 
         # Removes directory created by defining RunML object
         shutil.rmtree('tests/Temp_output')
+        """
 
     def test_calc_feature_importances_permutation(self):
         """
         Tests calc_feature_importances_permutation in train.py
         """
 
+        """
         print('Testing calc_feature_importances_permutation')
 
         results_dir = 'tests/Temp_output'
@@ -2426,6 +2429,7 @@ class TestClass(unittest.TestCase):
 
         # Removes directory created by defining RunML object
         shutil.rmtree('tests/Temp_output')
+        """
 
     def test_run_pca(self):
         """
@@ -3158,7 +3162,7 @@ class TestClass(unittest.TestCase):
         self.assertEqual(list(exp_search_results.keys()),
                          list(act_search_results.keys()))
         for key in exp_search_results.keys():
-            if type(exp_search_results[key]) in [np.ndarray, np.ma.core.MaskedArray]:
+            if type(exp_search_results[key]) == np.ndarray:
                 np.testing.assert_almost_equal(
                     exp_search_results[key], act_search_results[key], 7
                 )
@@ -3232,7 +3236,7 @@ class TestClass(unittest.TestCase):
         self.assertEqual(list(exp_search_results.keys()),
                          list(act_search_results.keys()))
         for key in exp_search_results.keys():
-            if type(exp_search_results[key]) in [np.ndarray, np.ma.core.MaskedArray]:
+            if type(exp_search_results[key]) == np.ndarray:
                 np.testing.assert_almost_equal(
                     exp_search_results[key], act_search_results[key], 7
                 )
@@ -3414,7 +3418,7 @@ class TestClass(unittest.TestCase):
         self.assertEqual(list(exp_search_results.keys()),
                          list(act_search_results.keys()))
         for key in exp_search_results.keys():
-            if type(exp_search_results[key]) in [np.ndarray, np.ma.core.MaskedArray]:
+            if type(exp_search_results[key]) == np.ndarray:
                 np.testing.assert_almost_equal(
                     exp_search_results[key], act_search_results[key], 7
                 )
@@ -3458,7 +3462,7 @@ class TestClass(unittest.TestCase):
         self.assertEqual(list(exp_search_results.keys()),
                          list(act_search_results.keys()))
         for key in exp_search_results.keys():
-            if type(exp_search_results[key]) in [np.ndarray, np.ma.core.MaskedArray]:
+            if type(exp_search_results[key]) == np.ndarray:
                 np.testing.assert_almost_equal(
                     exp_search_results[key], act_search_results[key], 7
                 )
@@ -3471,16 +3475,6 @@ class TestClass(unittest.TestCase):
         # Removes directory created by defining RunML object
         shutil.rmtree('tests/Temp_output')
 
-    def test_train_model(self):
-        """
-        Tests train_model in train.py
-        """
-
-        print('Testing train_model')
-
-        # Removes directory created by defining RunML object
-        #shutil.rmtree('tests/Temp_output')
-
     def test_test_model(self):
         """
         Tests test_model in train.py
@@ -3488,8 +3482,91 @@ class TestClass(unittest.TestCase):
 
         print('Testing test_model')
 
+        results_dir = 'tests/Temp_output'
+        x_train = pd.DataFrame({
+            'Feature_1': [5, 9, 8, 1, 3, 5, 10, 6, 7, 1, 8, 9, 1, 10, 2, 2, 8,
+                          7, 1, 3, 8, 4, 3, 4, 4, 6, 2, 10, 4, 5, 1, 7, 10, 3,
+                          10, 6, 3, 8, 1, 4, 6, 1, 5, 2, 2, 1, 7, 1, 2, 4],
+            'Feature_2': [9, 9, 7, 9, 6, 4, 7, 4, 2, 9, 7, 9, 7, 6, 4, 10, 8, 1,
+                          5, 4, 3, 3, 4, 3, 1, 4, 9, 6, 7, 10, 4, 6, 9, 2, 7, 4,
+                          3, 5, 7, 10, 1, 5, 3, 7, 2, 5, 10, 2, 2, 5],
+            'Feature_3': [5, 4, 8, 10, 3, 2, 10, 5, 1, 10, 5, 5, 5, 10, 7, 1, 8,
+                          8, 2, 1, 10, 9, 10, 6, 7, 4, 3, 3, 10, 10, 4, 7, 4, 6,
+                          10, 7, 6, 9, 4, 9, 9, 4, 4, 5, 10, 2, 10, 1, 7, 10]
+        })
+        y_train = [
+            'A', 'B', 'B', 'A', 'B', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'B',
+            'A', 'A', 'A', 'B', 'B', 'A', 'B', 'A', 'B', 'A', 'A', 'A', 'A',
+            'A', 'A', 'B', 'A', 'A', 'A', 'B', 'A', 'B', 'A', 'B', 'B', 'A',
+            'A', 'B', 'B', 'B', 'A', 'A', 'A', 'B', 'B', 'B', 'B'
+        ]
+        y_groups = [
+            'A_1', 'B_2', 'B_1', 'A_2', 'B_1', 'B_2', 'A_2', 'A_1', 'B_1',
+            'A_1', 'A_2', 'B_1', 'B_2', 'A_1', 'A_1', 'A_2', 'B_2', 'B_1',
+            'A_1', 'B_2', 'A_2', 'B_2', 'A_2', 'A_2', 'A_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'A_1', 'A_2', 'A_1', 'B_2', 'A_1', 'B_1', 'A_2',
+            'B_2', 'B_2', 'A_1', 'A_1', 'B_1', 'B_1', 'B_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'B_2', 'B_1', 'B_1'
+        ]
+        x_test = pd.DataFrame({
+            'Feature_1': [8, 6, 1, 7, 8, 6, 7, 9, 1, 1, 7, 5, 4, 4, 1, 2, 2, 3, 1, 8],
+            'Feature_2': [8, 8, 10, 6, 5, 7, 8, 10, 8, 1, 1, 10, 1, 9, 1, 8, 10, 3, 9, 4],
+            'Feature_3': [7, 6, 3, 1, 4, 4, 9, 8, 3, 8, 9, 3, 10, 3, 7, 4, 4, 1, 5, 10]
+        })
+        y_test = np.array(
+            ['B', 'A', 'A', 'B', 'A', 'A', 'A', 'B', 'B', 'B',
+             'B', 'A', 'B', 'A', 'A', 'B', 'B', 'A', 'A', 'B']
+        )
+        shuffle = False
+
+        test_ml_train = RunML(
+            results_dir, x_train, y_train, y_groups, shuffle, True
+        )
+
+        # Define function arguments
+        from sklearn.ensemble import AdaBoostClassifier
+        from sklearn.metrics import (
+            accuracy_score, f1_score, precision_score, recall_score,
+            cohen_kappa_score
+        )
+        trained_clf = AdaBoostClassifier(n_estimators=100, random_state=1).fit(
+            test_ml_train.x, test_ml_train.y
+        )
+        test_scoring_funcs = OrderedDict({
+            accuracy_score: {},
+            f1_score: {'average': 'weighted'},
+            precision_score: {'pos_label': 'B'},
+            recall_score: {'average': 'macro'},
+            cohen_kappa_score: {'weights': 'quadratic'}
+        })
+
+        # Test test_model
+        exp_predictions = np.array(
+            ['A', 'A', 'A', 'B', 'B', 'B', 'B', 'B', 'A', 'B',
+             'B', 'A', 'B', 'B', 'A', 'B', 'A', 'B', 'A', 'A']
+        )
+        exp_test_scores = OrderedDict({
+            'accuracy': 0.55,
+            'f1': 0.5488721804511277,
+            'precision': 0.5454545454545454,
+            'recall': 0.55,
+            'cohen_kappa': 0.09999999999999998
+        })
+        act_predictions, act_test_scores = test_ml_train.test_model(
+            x_test.to_numpy(), y_test, trained_clf, test_scoring_funcs, False,
+            '', True
+        )
+
+        np.testing.assert_equal(exp_predictions, act_predictions)
+        self.assertEqual(list(exp_test_scores.keys()),
+                         list(act_test_scores.keys()))
+        for key in exp_test_scores.keys():
+            exp_val = exp_test_scores[key]
+            act_val = act_test_scores[key]
+            np.testing.assert_almost_equal(exp_val, act_val, 7)
+
         # Removes directory created by defining RunML object
-        #shutil.rmtree('tests/Temp_output')
+        shutil.rmtree('tests/Temp_output')
 
     def test_run_ml(self):
         """
@@ -3498,8 +3575,195 @@ class TestClass(unittest.TestCase):
 
         print('Testing run_ml')
 
+        results_dir = 'tests/Temp_output'
+        x_train = pd.DataFrame({
+            'Feature_1': [5, 9, 8, 1, 3, 5, 10, 6, 7, 1, 8, 9, 1, 10, 2, 2, 8,
+                          7, 1, 3, 8, 4, 3, 4, 4, 6, 2, 10, 4, 5, 1, 7, 10, 3,
+                          10, 6, 3, 8, 1, 4, 6, 1, 5, 2, 2, 1, 7, 1, 2, 4],
+            'Feature_2': [9, 9, 7, 9, 6, 4, 7, 4, 2, 9, 7, 9, 7, 6, 4, 10, 8, 1,
+                          5, 4, 3, 3, 4, 3, 1, 4, 9, 6, 7, 10, 4, 6, 9, 2, 7, 4,
+                          3, 5, 7, 10, 1, 5, 3, 7, 2, 5, 10, 2, 2, 5],
+            'Feature_3': [5, 4, 8, 10, 3, 2, 10, 5, 1, 10, 5, 5, 5, 10, 7, 1, 8,
+                          8, 2, 1, 10, 9, 10, 6, 7, 4, 3, 3, 10, 10, 4, 7, 4, 6,
+                          10, 7, 6, 9, 4, 9, 9, 4, 4, 5, 10, 2, 10, 1, 7, 10]
+        })
+        y_train = [
+            'A', 'B', 'B', 'A', 'B', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'B',
+            'A', 'A', 'A', 'B', 'B', 'A', 'B', 'A', 'B', 'A', 'A', 'A', 'A',
+            'A', 'A', 'B', 'A', 'A', 'A', 'B', 'A', 'B', 'A', 'B', 'B', 'A',
+            'A', 'B', 'B', 'B', 'A', 'A', 'A', 'B', 'B', 'B', 'B'
+        ]
+        y_groups = [
+            'A_1', 'B_2', 'B_1', 'A_2', 'B_1', 'B_2', 'A_2', 'A_1', 'B_1',
+            'A_1', 'A_2', 'B_1', 'B_2', 'A_1', 'A_1', 'A_2', 'B_2', 'B_1',
+            'A_1', 'B_2', 'A_2', 'B_2', 'A_2', 'A_2', 'A_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'A_1', 'A_2', 'A_1', 'B_2', 'A_1', 'B_1', 'A_2',
+            'B_2', 'B_2', 'A_1', 'A_1', 'B_1', 'B_1', 'B_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'B_2', 'B_1', 'B_1'
+        ]
+        x_test = pd.DataFrame({
+            'Feature_1': [8, 6, 1, 7, 8, 6, 7, 9, 1, 1, 7, 5, 4, 4, 1, 2, 2, 3, 1, 8],
+            'Feature_2': [8, 8, 10, 6, 5, 7, 8, 10, 8, 1, 1, 10, 1, 9, 1, 8, 10, 3, 9, 4],
+            'Feature_3': [7, 6, 3, 1, 4, 4, 9, 8, 3, 8, 9, 3, 10, 3, 7, 4, 4, 1, 5, 10]
+        }).to_numpy()
+        y_test = np.array(
+            ['B', 'A', 'A', 'B', 'A', 'A', 'A', 'B', 'B', 'B',
+             'B', 'A', 'B', 'A', 'A', 'B', 'B', 'A', 'A', 'B']
+        )
+        shuffle = False
+
+        test_ml_train = RunML(
+            results_dir, x_train, y_train, y_groups, shuffle, True
+        )
+
+        # Define function arguments
+        from sklearn.ensemble import AdaBoostClassifier
+        from sklearn.model_selection import StratifiedKFold
+        from sklearn.metrics import (
+            accuracy_score, f1_score, precision_score, recall_score,
+            cohen_kappa_score, make_scorer
+        )
+
+        splits = list(StratifiedKFold(
+            n_splits=2, shuffle=True, random_state=1
+        ).split(X=x_train, y=y_train))
+        f1 = make_scorer(f1_score, average='binary', pos_label='A')
+        precision = make_scorer(precision_score, average='weighted')
+        test_scoring_funcs = OrderedDict({
+            accuracy_score: {},
+            f1_score: {'average': 'weighted'},
+            precision_score: {'pos_label': 'B'},
+            recall_score: {'average': 'macro'},
+            cohen_kappa_score: {'weights': 'quadratic'}
+        })
+
+        # Test run_ml for randomised search
+        exp_search_results = {
+            'params': [{'AdaBoostClassifier__n_estimators': 100},
+                       {'AdaBoostClassifier__n_estimators': 30},
+                       {'AdaBoostClassifier__n_estimators': 1000},
+                       {'AdaBoostClassifier__n_estimators': 10}],
+            'split0_test_score': np.array([0., 0., 0., 0.]),
+            'split1_test_score': np.array([0.55172414, 0.55172414, 0.55172414, 0.55172414]),
+            'mean_test_score': np.array([0.27586207, 0.27586207, 0.27586207, 0.27586207]),
+            'std_test_score': np.array([0.27586207, 0.27586207, 0.27586207, 0.27586207]),
+            'rank_test_score': np.array([1, 1, 1, 1], dtype=np.int32)
+        }
+        exp_best_params = {'AdaBoostClassifier__n_estimators': 100}
+
+        act_random_search = test_ml_train.run_ml(
+            AdaBoostClassifier(random_state=1), x_train=test_ml_train.x,
+            y_train=test_ml_train.y, train_groups=test_ml_train.sub_classes,
+            x_test=x_test, y_test=y_test,
+            selected_features=['Feature_2', 'Feature_3'], splits=None,
+            resampling_method='smoteenn', n_components_pca=2,
+            run='randomsearch',
+            params={'n_estimators': np.array([10, 30, 100, 300, 1000])},
+            train_scoring_metric=f1, test_scoring_funcs={}, n_iter=4,
+            cv_folds=2, test=True
+        )
+        act_search_results = act_random_search.cv_results_
+        for key in [
+            'mean_fit_time', 'std_fit_time', 'mean_score_time',
+            'std_score_time', 'param_AdaBoostClassifier__n_estimators'
+        ]:
+            del(act_search_results[key])
+        act_best_params = act_random_search.best_params_
+
+        self.assertEqual(list(exp_search_results.keys()),
+                         list(act_search_results.keys()))
+        for key in exp_search_results.keys():
+            if type(exp_search_results[key]) == np.ndarray:
+                np.testing.assert_almost_equal(
+                    exp_search_results[key], act_search_results[key], 7
+                )
+            else:
+                self.assertEqual(
+                    exp_search_results[key], act_search_results[key]
+                )
+        self.assertEqual(exp_best_params, act_best_params)
+
+        # Test run_ml for grid search
+        exp_search_results = {
+            'params': [{'AdaBoostClassifier__n_estimators': 10},
+                       {'AdaBoostClassifier__n_estimators': 30},
+                       {'AdaBoostClassifier__n_estimators': 100},
+                       {'AdaBoostClassifier__n_estimators': 300},
+                       {'AdaBoostClassifier__n_estimators': 1000}],
+            'split0_test_score': np.array([0.58655462, 0.47385621, 0.41176471, 0.52406417, 0.52406417]),
+            'split1_test_score': np.array([0.48190045, 0.31334842, 0.40784314, 0.47860963, 0.47860963]),
+            'split2_test_score': np.array([0.375     , 0.375     , 0.42708333, 0.42708333, 0.42708333]),
+            'mean_test_score': np.array([0.48115169, 0.38740154, 0.41556373, 0.47658571, 0.47658571]),
+            'std_test_score': np.array([0.08636844, 0.0661112 , 0.00830143, 0.03961812, 0.03961812]),
+            'rank_test_score': np.array([1, 5, 4, 2, 2], dtype=np.int32)
+        }
+        exp_best_params = {'AdaBoostClassifier__n_estimators': 10}
+
+        act_grid_search = test_ml_train.run_ml(
+            AdaBoostClassifier(random_state=1), x_train=test_ml_train.x,
+            y_train=test_ml_train.y, train_groups=None, x_test=x_test,
+            y_test=y_test, selected_features=['Feature_2', 'Feature_1'],
+            splits=None, resampling_method='no_balancing',
+            n_components_pca=None, run='gridsearch',
+            params={'n_estimators': np.array([10, 30, 100, 300, 1000])},
+            train_scoring_metric=precision, test_scoring_funcs={},
+            n_iter=3, cv_folds=3, test=True
+        )
+        act_search_results = act_grid_search.cv_results_
+        for key in [
+            'mean_fit_time', 'std_fit_time', 'mean_score_time',
+            'std_score_time', 'param_AdaBoostClassifier__n_estimators'
+        ]:
+            del(act_search_results[key])
+        act_best_params = act_grid_search.best_params_
+
+        self.assertEqual(list(exp_search_results.keys()),
+                         list(act_search_results.keys()))
+        for key in exp_search_results.keys():
+            if type(exp_search_results[key]) == np.ndarray:
+                np.testing.assert_almost_equal(
+                    exp_search_results[key], act_search_results[key], 7
+                )
+            else:
+                self.assertEqual(
+                    exp_search_results[key], act_search_results[key]
+                )
+        self.assertEqual(exp_best_params, act_best_params)
+
+        # Test run_ml for training ML model
+        exp_predictions = np.array(
+            ['B', 'B', 'A', 'A', 'A', 'A', 'B', 'B', 'A', 'B',
+             'A', 'A', 'B', 'A', 'B', 'A', 'A', 'A', 'A', 'B']
+        )
+        exp_test_scores = OrderedDict({
+            'accuracy': 0.6,
+            'f1': 0.595959595959596,
+            'precision': 0.625,
+            'recall': 0.6,
+            'cohen_kappa': 0.19999999999999996
+        })
+        act_trained_clf, act_predictions, act_test_scores = test_ml_train.run_ml(
+            AdaBoostClassifier, x_train=test_ml_train.x,
+            y_train=test_ml_train.y, train_groups=test_ml_train.sub_classes,
+            x_test=x_test, y_test=y_test,
+            selected_features=['Feature_2', 'Feature_3', 'Feature_1'],
+            splits=splits, resampling_method='max_sampling', n_components_pca=2,
+            run='train', params={'n_estimators': 100, 'random_state': 1},
+            train_scoring_metric='accuracy',
+            test_scoring_funcs=test_scoring_funcs, n_iter=None, cv_folds=5,
+            test=True
+        )
+
+        np.testing.assert_equal(exp_predictions, act_predictions)
+        self.assertEqual(list(exp_test_scores.keys()),
+                         list(act_test_scores.keys()))
+        for key in exp_test_scores.keys():
+            exp_val = exp_test_scores[key]
+            act_val = act_test_scores[key]
+            np.testing.assert_almost_equal(exp_val, act_val, 7)
+
         # Removes directory created by defining RunML object
-        #shutil.rmtree('tests/Temp_output')
+        shutil.rmtree('tests/Temp_output')
 
     def test_run_nested_CV(self):
         """
