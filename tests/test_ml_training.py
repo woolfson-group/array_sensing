@@ -3119,7 +3119,7 @@ class TestClass(unittest.TestCase):
             results_dir, fluor_data, classes, subclasses, shuffle, True
         )
 
-        # Define function arguments
+        # Test random search with PCA
         from sklearn.ensemble import AdaBoostClassifier
         from sklearn.model_selection import GroupKFold
 
@@ -3129,7 +3129,6 @@ class TestClass(unittest.TestCase):
             groups=test_ml_train.sub_classes
         ))
 
-        # Test random search with PCA
         exp_search_results = {
             'params': [{'AdaBoostClassifier__n_estimators': 30},
                        {'AdaBoostClassifier__n_estimators': 10},
@@ -3253,8 +3252,224 @@ class TestClass(unittest.TestCase):
 
         print('Testing run_grid_search')
 
+        results_dir = 'tests/Temp_output'
+        fluor_data = pd.DataFrame({
+            'Feature_1': [5, 9, 8, 1, 3, 5, 10, 6, 7, 1, 8, 9, 1, 10, 2, 2, 8,
+                          7, 1, 3, 8, 4, 3, 4, 4, 6, 2, 10, 4, 5, 1, 7, 10, 3,
+                          10, 6, 3, 8, 1, 4, 6, 1, 5, 2, 2, 1, 7, 1, 2, 4],
+            'Feature_2': [9, 9, 7, 9, 6, 4, 7, 4, 2, 9, 7, 9, 7, 6, 4, 10, 8, 1,
+                          5, 4, 3, 3, 4, 3, 1, 4, 9, 6, 7, 10, 4, 6, 9, 2, 7, 4,
+                          3, 5, 7, 10, 1, 5, 3, 7, 2, 5, 10, 2, 2, 5],
+            'Feature_3': [5, 4, 8, 10, 3, 2, 10, 5, 1, 10, 5, 5, 5, 10, 7, 1, 8,
+                          8, 2, 1, 10, 9, 10, 6, 7, 4, 3, 3, 10, 10, 4, 7, 4, 6,
+                          10, 7, 6, 9, 4, 9, 9, 4, 4, 5, 10, 2, 10, 1, 7, 10]
+        })
+        classes = [
+            'A', 'B', 'B', 'A', 'B', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'B',
+            'A', 'A', 'A', 'B', 'B', 'A', 'B', 'A', 'B', 'A', 'A', 'A', 'A',
+            'A', 'A', 'B', 'A', 'A', 'A', 'B', 'A', 'B', 'A', 'B', 'B', 'A',
+            'A', 'B', 'B', 'B', 'A', 'A', 'A', 'B', 'B', 'B', 'B'
+        ]
+        subclasses = [
+            'A_1', 'B_2', 'B_1', 'A_2', 'B_1', 'B_2', 'A_2', 'A_1', 'B_1',
+            'A_1', 'A_2', 'B_1', 'B_2', 'A_1', 'A_1', 'A_2', 'B_2', 'B_1',
+            'A_1', 'B_2', 'A_2', 'B_2', 'A_2', 'A_2', 'A_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'A_1', 'A_2', 'A_1', 'B_2', 'A_1', 'B_1', 'A_2',
+            'B_2', 'B_2', 'A_1', 'A_1', 'B_1', 'B_1', 'B_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'B_2', 'B_1', 'B_1'
+        ]
+        shuffle = False
+
+        test_ml_train = RunML(
+            results_dir, fluor_data, classes, subclasses, shuffle, True
+        )
+
+        # Test grid search with PCA
+        from sklearn.svm import SVC
+        from sklearn.model_selection import StratifiedKFold
+        from sklearn.metrics import recall_score, make_scorer
+
+        parameters =  {'C': np.logspace(-2, 3, num=6, base=10),
+                       'gamma': np.logspace(-4, 1, num=6, base=10)}
+        splits = list(StratifiedKFold(n_splits=4, shuffle=True, random_state=1).split(
+            X=test_ml_train.x, y=test_ml_train.y, groups=test_ml_train.sub_classes
+        ))
+        scoring_metric = make_scorer(recall_score, average='macro')
+
+        exp_search_results = {
+            'params': [{'SVC__C': 0.01, 'SVC__gamma': 0.0001},
+                       {'SVC__C': 0.01, 'SVC__gamma': 0.001},
+                       {'SVC__C': 0.01, 'SVC__gamma': 0.01},
+                       {'SVC__C': 0.01, 'SVC__gamma': 0.1},
+                       {'SVC__C': 0.01, 'SVC__gamma': 1.0},
+                       {'SVC__C': 0.01, 'SVC__gamma': 10.0},
+                       {'SVC__C': 0.1, 'SVC__gamma': 0.0001},
+                       {'SVC__C': 0.1, 'SVC__gamma': 0.001},
+                       {'SVC__C': 0.1, 'SVC__gamma': 0.01},
+                       {'SVC__C': 0.1, 'SVC__gamma': 0.1},
+                       {'SVC__C': 0.1, 'SVC__gamma': 1.0},
+                       {'SVC__C': 0.1, 'SVC__gamma': 10.0},
+                       {'SVC__C': 1.0, 'SVC__gamma': 0.0001},
+                       {'SVC__C': 1.0, 'SVC__gamma': 0.001},
+                       {'SVC__C': 1.0, 'SVC__gamma': 0.01},
+                       {'SVC__C': 1.0, 'SVC__gamma': 0.1},
+                       {'SVC__C': 1.0, 'SVC__gamma': 1.0},
+                       {'SVC__C': 1.0, 'SVC__gamma': 10.0},
+                       {'SVC__C': 10.0, 'SVC__gamma': 0.0001},
+                       {'SVC__C': 10.0, 'SVC__gamma': 0.001},
+                       {'SVC__C': 10.0, 'SVC__gamma': 0.01},
+                       {'SVC__C': 10.0, 'SVC__gamma': 0.1},
+                       {'SVC__C': 10.0, 'SVC__gamma': 1.0},
+                       {'SVC__C': 10.0, 'SVC__gamma': 10.0},
+                       {'SVC__C': 100.0, 'SVC__gamma': 0.0001},
+                       {'SVC__C': 100.0, 'SVC__gamma': 0.001},
+                       {'SVC__C': 100.0, 'SVC__gamma': 0.01},
+                       {'SVC__C': 100.0, 'SVC__gamma': 0.1},
+                       {'SVC__C': 100.0, 'SVC__gamma': 1.0},
+                       {'SVC__C': 100.0, 'SVC__gamma': 10.0},
+                       {'SVC__C': 1000.0, 'SVC__gamma': 0.0001},
+                       {'SVC__C': 1000.0, 'SVC__gamma': 0.001},
+                       {'SVC__C': 1000.0, 'SVC__gamma': 0.01},
+                       {'SVC__C': 1000.0, 'SVC__gamma': 0.1},
+                       {'SVC__C': 1000.0, 'SVC__gamma': 1.0},
+                       {'SVC__C': 1000.0, 'SVC__gamma': 10.0}],
+            'split0_test_score': np.array([
+                0.51190476, 0.51190476, 0.51190476, 0.51190476, 0.66666667,
+                0.45238095, 0.51190476, 0.51190476, 0.51190476, 0.51190476,
+                0.66666667, 0.45238095, 0.51190476, 0.51190476, 0.51190476,
+                0.51190476, 0.52380952, 0.53571429, 0.51190476, 0.51190476,
+                0.51190476, 0.58333333, 0.53571429, 0.63095238, 0.51190476,
+                0.51190476, 0.51190476, 0.53571429, 0.53571429, 0.64285714,
+                0.51190476, 0.51190476, 0.58333333, 0.53571429, 0.53571429,
+                0.55952381
+            ]),
+            'split1_test_score': np.array([
+                0.21428571, 0.21428571, 0.14285714, 0.14285714, 0.1547619,
+                0.42857143, 0.21428571, 0.21428571, 0.14285714, 0.14285714,
+                0.1547619, 0.42857143, 0.21428571, 0.21428571, 0.14285714,
+                0.14285714, 0.1547619, 0.60714286, 0.21428571, 0.21428571,
+                0.14285714, 0.1547619, 0.28571429, 0.60714286, 0.21428571,
+                0.21428571, 0.07142857, 0.08333333, 0.45238095, 0.53571429,
+                0.21428571, 0.14285714, 0.1547619, 0.08333333, 0.51190476,
+                0.53571429
+            ]),
+            'split2_test_score': np.array([
+                0.17142857, 0.17142857, 0.17142857, 0.31428571, 0.48571429,
+                0.51428571, 0.17142857, 0.17142857, 0.17142857, 0.31428571,
+                0.48571429, 0.51428571, 0.17142857, 0.17142857, 0.17142857,
+                0.31428571, 0.51428571, 0.51428571, 0.17142857, 0.17142857,
+                0.17142857, 0.45714286, 0.51428571, 0.51428571, 0.17142857,
+                0.17142857, 0.24285714, 0.51428571, 0.51428571, 0.51428571,
+                0.17142857, 0.17142857, 0.45714286, 0.51428571, 0.58571429,
+                0.58571429
+            ]),
+            'split3_test_score': np.array([
+                0.5, 0.5, 0.41666667, 0.5, 0.66666667, 0.41666667, 0.5, 0.5,
+                0.41666667, 0.5, 0.66666667, 0.41666667, 0.5, 0.5, 0.41666667,
+                0.5, 0.66666667, 0.41666667, 0.5, 0.5, 0.41666667, 0.5,
+                0.58333333, 0.33333333, 0.5, 0.5, 0.41666667, 0.66666667, 0.5,
+                0.41666667, 0.5, 0.5, 0.5, 0.58333333, 0.5, 0.33333333
+            ]),
+            'mean_test_score': np.array([
+                0.34940476, 0.34940476, 0.31071429, 0.3672619, 0.49345238,
+                0.45297619, 0.34940476, 0.34940476, 0.31071429, 0.3672619,
+                0.49345238, 0.45297619, 0.34940476, 0.34940476, 0.31071429,
+                0.3672619, 0.46488095, 0.51845238, 0.34940476, 0.34940476,
+                0.31071429, 0.42380952, 0.4797619 , 0.52142857, 0.34940476,
+                0.34940476, 0.31071429, 0.45, 0.50059524, 0.52738095,
+                0.34940476, 0.33154762, 0.42380952, 0.42916667, 0.53333333,
+                0.50357143
+            ]),
+            'std_test_score': np.array([
+                0.15733552, 0.15733552, 0.15754368, 0.15141411, 0.20903199,
+                0.03766028, 0.15733552, 0.15733552, 0.15754368, 0.15141411,
+                0.20903199, 0.03766028, 0.15733552, 0.15733552, 0.15754368,
+                0.15141411, 0.18894755, 0.06808389, 0.15733552, 0.15733552,
+                0.15754368, 0.16182596, 0.11478685, 0.11701842, 0.15733552,
+                0.15733552, 0.1684976, 0.21958397, 0.03060126, 0.08036376,
+                0.15733552, 0.17474775, 0.16182596, 0.20122481, 0.03286232,
+                0.09986527
+            ]),
+            'rank_test_score': np.array(
+                [20, 20, 32, 17, 7, 11, 20, 20, 32, 17, 7, 11, 20, 20, 32, 17,
+                 10, 4, 20, 20, 32, 15, 9, 3, 20, 20, 32, 13, 6, 2, 20, 31, 15,
+                 14, 1, 5], dtype=np.int32)
+        }
+        exp_best_params = {'SVC__C': 1000.0,
+                           'SVC__gamma': 1.0}
+
+        act_grid_search = test_ml_train.run_grid_search(
+            test_ml_train.x, test_ml_train.y, test_ml_train.sub_classes,
+            ['Feature_1', 'Feature_2', 'Feature_3'], SVC(random_state=1),
+            splits, 'smotetomek', 1, parameters, scoring_metric, True
+        )
+        act_search_results = act_grid_search.cv_results_
+        for key in [
+            'mean_fit_time', 'std_fit_time', 'mean_score_time',
+            'std_score_time', 'param_SVC__C', 'param_SVC__gamma'
+        ]:
+            del(act_search_results[key])
+        act_best_params = act_grid_search.best_params_
+
+        self.assertEqual(list(exp_search_results.keys()),
+                         list(act_search_results.keys()))
+        for key in exp_search_results.keys():
+            if type(exp_search_results[key]) in [np.ndarray, np.ma.core.MaskedArray]:
+                np.testing.assert_almost_equal(
+                    exp_search_results[key], act_search_results[key], 7
+                )
+            else:
+                self.assertEqual(
+                    exp_search_results[key], act_search_results[key]
+                )
+        self.assertEqual(exp_best_params, act_best_params)
+
+        # Test grid search without PCA
+        from sklearn.naive_bayes import GaussianNB
+        from sklearn.model_selection import GroupKFold
+
+        splits = list(GroupKFold(n_splits=2).split(
+            X=test_ml_train.x, y=test_ml_train.y,
+            groups=test_ml_train.sub_classes
+        ))
+
+        exp_search_results = {
+            'params': [{}],
+            'split0_test_score': np.array([0.52]),
+            'split1_test_score': np.array([0.4]),
+            'mean_test_score': np.array([0.46]),
+            'std_test_score': np.array([0.06]),
+            'rank_test_score': np.array([1], dtype=np.int32)
+        }
+        exp_best_params = {}
+
+        act_grid_search = test_ml_train.run_grid_search(
+            test_ml_train.x, test_ml_train.y, test_ml_train.sub_classes,
+            ['Feature_1', 'Feature_2'], GaussianNB(), splits, 'no_balancing',
+            None, {}, 'accuracy', True
+        )
+        act_search_results = act_grid_search.cv_results_
+        for key in [
+            'mean_fit_time', 'std_fit_time', 'mean_score_time', 'std_score_time'
+        ]:
+            del(act_search_results[key])
+        act_best_params = act_grid_search.best_params_
+
+        self.assertEqual(list(exp_search_results.keys()),
+                         list(act_search_results.keys()))
+        for key in exp_search_results.keys():
+            if type(exp_search_results[key]) in [np.ndarray, np.ma.core.MaskedArray]:
+                np.testing.assert_almost_equal(
+                    exp_search_results[key], act_search_results[key], 7
+                )
+            else:
+                self.assertEqual(
+                    exp_search_results[key], act_search_results[key]
+                )
+        self.assertEqual(exp_best_params, act_best_params)
+
         # Removes directory created by defining RunML object
-        #shutil.rmtree('tests/Temp_output')
+        shutil.rmtree('tests/Temp_output')
 
     def test_train_model(self):
         """
