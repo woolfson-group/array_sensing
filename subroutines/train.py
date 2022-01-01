@@ -1475,7 +1475,10 @@ class RunML(DefData):
         if test is False:
             orig_model = copy.deepcopy(classifier)()
         else:
-            orig_model = copy.deepcopy(classifier)(random_state=1)
+            try:
+                orig_model = copy.deepcopy(classifier)(random_state=1)
+            except TypeError:
+                orig_model = copy.deepcopy(classifier)()
         orig_grid_search = GridSearchCV(
             estimator=orig_model, param_grid=parameters, error_score=np.nan,
             scoring=model_metric
@@ -2717,20 +2720,14 @@ class RunML(DefData):
             logo = None
             skf = None
             gkf = None
-            if type(cv_folds_outer_loop) == str:
-                if cv_folds_outer_loop.lower().replace(' ', '') == 'loocv':
-                    if groups is None:
-                        loocv = LeaveOneOut()
-                        outer_splits = list(loocv.split(X=x, y=y))
-                    else:
-                        logo = LeaveOneGroupOut()
-                        outer_splits = list(loocv.split(X=x, y=y, groups=groups))
+            if cv_folds_outer_loop == 'loocv':
+                if groups is None:
+                    loocv = LeaveOneOut()
+                    outer_splits = list(loocv.split(X=x, y=y))
                 else:
-                    raise ValueError(
-                        'Expect "cv_folds_outer_loop" to be set either to '
-                        '"loocv" or to a positive integer value in the range of'
-                        ' 2 - 10'
-                    )
+                    logo = LeaveOneGroupOut()
+                    outer_splits = list(logo.split(X=x, y=y, groups=groups))
+
             else:
                 # There must be more than cv_folds_outer_loop instances of the
                 # dataset
@@ -2741,7 +2738,15 @@ class RunML(DefData):
                     )
                 # Generates splits
                 if groups is None:
-                    skf = StratifiedKFold(n_splits=cv_folds_outer_loop, shuffle=True)
+                    if test is False:
+                        skf = StratifiedKFold(
+                            n_splits=cv_folds_outer_loop, shuffle=True
+                        )
+                    else:
+                        skf = StratifiedKFold(
+                            n_splits=cv_folds_outer_loop, shuffle=True,
+                            random_state=1
+                        )
                     outer_splits = list(skf.split(X=x, y=y))
                 else:
                     gkf = GroupKFold(n_splits=cv_folds_outer_loop)
@@ -2777,12 +2782,11 @@ class RunML(DefData):
                 key.split('__')[1]: val for key, val in search.best_params_.items()
             })
             best_params = OrderedDict({**fixed_params, **best_params})
-            test_clf = clf(**best_params)
-            fold_search, fold_test_scores, fold_predictions = self.run_ml(
-                test_clf, x_train, y_train, train_groups, x_test, y_test,
+            fold_search, fold_predictions, fold_test_scores = self.run_ml(
+                clf, x_train, y_train, train_groups, x_test, y_test,
                 selected_features, None, resampling_method, n_components_pca,
-                'train', {}, train_scoring_metric, test_scoring_funcs, n_iter,
-                cv_folds_inner_loop, draw_conf_mat, plt_name, test
+                'train', best_params, train_scoring_metric, test_scoring_funcs,
+                None, cv_folds_inner_loop, draw_conf_mat, plt_name, test
             )
 
             nested_cv_search['outer_loop_params'].append(best_params)
@@ -2798,46 +2802,44 @@ class RunML(DefData):
         for key, val in nested_cv_search.items():
             if key == 'test_scores':
                 for sub_key, sub_val in nested_cv_search[key].items():
-                    if len(sub_val) != len(splits):
+                    if len(sub_val) != len(outer_splits):
                         raise Exception(
                             'Output dictionary from running nested '
                             'cross-validation does not contain the expected '
                             'number of entries'
                         )
             else:
-                if len(val) != len(splits):
+                if len(val) != len(outer_splits):
                     raise Exception(
                         'Output dictionary from running nested cross-validation'
                         ' does not contain the expected number of entries'
                     )
 
-        # Calculate average, standard deviation and percentiles of interest
-        # across cv_folds_outer_loop folds
+        # Calculate average and standard deviation across cv_folds_outer_loop
+        # folds. Have not included 2.5th and 97.5th percentiles as highly
+        # unlikely that there will be sufficient CV folds to calculate these
+        # metrics accurately
         nested_cv_search['average_test_scores'] = OrderedDict()
         for scoring_func_name, score_list in nested_cv_search['test_scores'].items():
             nested_cv_search['average_test_scores'][scoring_func_name] = np.mean(score_list)
-        nested_cv_search['std_test_scores'] = OrderedDict()
+        nested_cv_search['stddev_test_scores'] = OrderedDict()
         for scoring_func_name, score_list in nested_cv_search['test_scores'].items():
-            nested_cv_search['std_test_scores'][scoring_func_name] = np.std(score_list, ddof=0)  # Population standard deviation
-        nested_cv_search['percentile_test_scores'] = OrderedDict()
-        for scoring_func_name, score_list in nested_cv_search['test_scores'].items():
-            nested_cv_search['percentile_test_scores'][scoring_func_name] = [
-                np.percentile(score_list, 2.5), np.percentile(score_list, 50),
-                np.percentile(score_list, 97.5)
-            ]
+            nested_cv_search['stddev_test_scores'][scoring_func_name] = np.std(score_list, ddof=0)  # Population standard deviation
 
         # Records which outer loop parameters lead to the best model performance
-        best_index = np.where(
-               nested_cv_search['test_scores'][train_scoring_metric]
-            == np.amax(nested_cv_search['test_scores'][train_scoring_metric])
-        )[0][0]
-        nested_cv_search['best_outer_loop_params'] = nested_cv_search[
-            'outer_loop_params'
-        ][best_index]
+        nested_cv_search['best_outer_loop_params'] = OrderedDict()
+        for scoring_func_name in nested_cv_search['test_scores'].keys():
+            best_index = np.where(
+                   nested_cv_search['test_scores'][scoring_func_name]
+                == np.amax(nested_cv_search['test_scores'][scoring_func_name])
+            )[0][0]
+            nested_cv_search['best_outer_loop_params'][scoring_func_name] = (
+                nested_cv_search['outer_loop_params'][best_index]
+            )
 
         return nested_cv_search
 
-    def run_5x2_CV_paired_t_test(
+    def run_5x2_CV_combined_F_test(
         self, x, y, selected_features_1, selected_features_2,
         classifier_1, classifier_2, params_1, params_2, resampling_method_1,
         resampling_method_2, n_components_pca_1, n_components_pca_2, test=False
@@ -2888,15 +2890,15 @@ class RunML(DefData):
 
         Output
         ----------
-        - F: F statistic output from paired t-test
-        - p: p value output from paired t-test
+        - F: F statistic output from combined F-test
+        - p: p value output from combined F-test
         """
 
         # Checks argument values are suitable to run the function. Arguments of
         # "check_arguments" that are not specified for
-        # "run_5x2_CV_paired_t_test" are set to values that will pass the checks
+        # "run_5x2_CV_combined_F_test" are set to values that will pass the checks
         check_arguments(
-            func_name='run_5x2_CV_paired_t_test', x_train=x, y_train=y,
+            func_name='run_5x2_CV_combined_F_test', x_train=x, y_train=y,
             train_groups=None, x_test=np.array([]), y_test=np.array([]),
             selected_features=selected_features_1,
             splits=[(y, np.array([]))], resampling_method=resampling_method_1,
@@ -2907,7 +2909,7 @@ class RunML(DefData):
             draw_conf_mat=True, plt_name='', test=test
         )
         check_arguments(
-            func_name='run_5x2_CV_paired_t_test', x_train=x, y_train=y,
+            func_name='run_5x2_CV_combined_F_test', x_train=x, y_train=y,
             train_groups=None, x_test=np.array([]), y_test=np.array([]),
             selected_features=selected_features_2,
             splits=[(y, np.array([]))], resampling_method=resampling_method_2,

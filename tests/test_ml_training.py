@@ -3496,7 +3496,7 @@ class TestClass(unittest.TestCase):
             'A', 'A', 'B', 'A', 'A', 'A', 'B', 'A', 'B', 'A', 'B', 'B', 'A',
             'A', 'B', 'B', 'B', 'A', 'A', 'A', 'B', 'B', 'B', 'B'
         ]
-        y_groups = [
+        train_groups = [
             'A_1', 'B_2', 'B_1', 'A_2', 'B_1', 'B_2', 'A_2', 'A_1', 'B_1',
             'A_1', 'A_2', 'B_1', 'B_2', 'A_1', 'A_1', 'A_2', 'B_2', 'B_1',
             'A_1', 'B_2', 'A_2', 'B_2', 'A_2', 'A_2', 'A_2', 'A_1', 'A_1',
@@ -3516,7 +3516,7 @@ class TestClass(unittest.TestCase):
         shuffle = False
 
         test_ml_train = RunML(
-            results_dir, x_train, y_train, y_groups, shuffle, True
+            results_dir, x_train, y_train, train_groups, shuffle, True
         )
 
         # Define function arguments
@@ -3589,7 +3589,7 @@ class TestClass(unittest.TestCase):
             'A', 'A', 'B', 'A', 'A', 'A', 'B', 'A', 'B', 'A', 'B', 'B', 'A',
             'A', 'B', 'B', 'B', 'A', 'A', 'A', 'B', 'B', 'B', 'B'
         ]
-        y_groups = [
+        train_groups = [
             'A_1', 'B_2', 'B_1', 'A_2', 'B_1', 'B_2', 'A_2', 'A_1', 'B_1',
             'A_1', 'A_2', 'B_1', 'B_2', 'A_1', 'A_1', 'A_2', 'B_2', 'B_1',
             'A_1', 'B_2', 'A_2', 'B_2', 'A_2', 'A_2', 'A_2', 'A_1', 'A_1',
@@ -3609,7 +3609,7 @@ class TestClass(unittest.TestCase):
         shuffle = False
 
         test_ml_train = RunML(
-            results_dir, x_train, y_train, y_groups, shuffle, True
+            results_dir, x_train, y_train, train_groups, shuffle, True
         )
 
         # Define function arguments
@@ -3768,18 +3768,8 @@ class TestClass(unittest.TestCase):
 
         print('Testing run_nested_CV')
 
-        # Removes directory created by defining RunML object
-        #shutil.rmtree('tests/Temp_output')
-
-    def test_run_5x2_CV_paired_t_test(self):
-        """
-        Tests run_5x2_CV_paired_t_test in train.py
-        """
-
-        print('Testing run_5x2_CV_paired_t_test')
-
         results_dir = 'tests/Temp_output'
-        x_train = pd.DataFrame({
+        x = pd.DataFrame({
             'Feature_1': [5, 9, 8, 1, 3, 5, 10, 6, 7, 1, 8, 9, 1, 10, 2, 2, 8,
                           7, 1, 3, 8, 4, 3, 4, 4, 6, 2, 10, 4, 5, 1, 7, 10, 3,
                           10, 6, 3, 8, 1, 4, 6, 1, 5, 2, 2, 1, 7, 1, 2, 4],
@@ -3790,13 +3780,13 @@ class TestClass(unittest.TestCase):
                           8, 2, 1, 10, 9, 10, 6, 7, 4, 3, 3, 10, 10, 4, 7, 4, 6,
                           10, 7, 6, 9, 4, 9, 9, 4, 4, 5, 10, 2, 10, 1, 7, 10]
         })
-        y_train = [
+        y = [
             'A', 'B', 'B', 'A', 'B', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'B',
             'A', 'A', 'A', 'B', 'B', 'A', 'B', 'A', 'B', 'A', 'A', 'A', 'A',
             'A', 'A', 'B', 'A', 'A', 'A', 'B', 'A', 'B', 'A', 'B', 'B', 'A',
             'A', 'B', 'B', 'B', 'A', 'A', 'A', 'B', 'B', 'B', 'B'
         ]
-        y_groups = [
+        groups = [
             'A_1', 'B_2', 'B_1', 'A_2', 'B_1', 'B_2', 'A_2', 'A_1', 'B_1',
             'A_1', 'A_2', 'B_1', 'B_2', 'A_1', 'A_1', 'A_2', 'B_2', 'B_1',
             'A_1', 'B_2', 'A_2', 'B_2', 'A_2', 'A_2', 'A_2', 'A_1', 'A_1',
@@ -3806,9 +3796,261 @@ class TestClass(unittest.TestCase):
         ]
         shuffle = False
 
-        test_ml_train = RunML(
-            results_dir, x_train, y_train, y_groups, shuffle, True
+        test_ml_train = RunML(results_dir, x, y, groups, shuffle, True)
+
+        # Define function arguments
+        from sklearn.neighbors import KNeighborsClassifier
+        from sklearn.svm import LinearSVC
+        from sklearn.metrics import (
+            make_scorer, accuracy_score, f1_score, recall_score
         )
+
+        f1 = make_scorer(f1_score, average='weighted')
+
+        # Test run_nested_CV with leave one group out cross-validation
+        exp_outer_loop_params = [OrderedDict({'metric': 'minkowski',
+                                              'n_jobs': -1,
+                                              'weights': 'uniform',
+                                              'p': 2,
+                                              'n_neighbors': 1}),
+                                 OrderedDict({'metric': 'minkowski',
+                                              'n_jobs': -1,
+                                              'weights': 'uniform',
+                                              'p': 2,
+                                              'n_neighbors': 1}),
+                                 OrderedDict({'metric': 'minkowski',
+                                              'n_jobs': -1,
+                                              'weights': 'uniform',
+                                              'p': 1,
+                                              'n_neighbors': 2}),
+                                 OrderedDict({'metric': 'minkowski',
+                                              'n_jobs': -1,
+                                              'weights': 'uniform',
+                                              'p': 1,
+                                              'n_neighbors': 2})]
+        exp_test_scores = OrderedDict({'accuracy': [0.3333333333333333, 0.5833333333333334, 0.2, 0.07692307692307693],
+                                       'recall': [0.3333333333333333, 0.5833333333333334, 0.2, 0.07692307692307693]})
+        exp_average_test_scores = OrderedDict({'accuracy': 0.2983974358974359,
+                                               'recall': 0.2983974358974359})
+        exp_std_test_scores = OrderedDict({'accuracy': 0.18784430364769186,
+                                           'recall': 0.18784430364769186})
+        exp_best_params = OrderedDict({'accuracy': OrderedDict({'metric': 'minkowski',
+                                                                'n_jobs': -1,
+                                                                'weights': 'uniform',
+                                                                'p': 2,
+                                                                'n_neighbors': 1}),
+                                       'recall': OrderedDict({'metric': 'minkowski',
+                                                              'n_jobs': -1,
+                                                              'weights': 'uniform',
+                                                              'p': 2,
+                                                              'n_neighbors': 1})})
+        exp_predictions = [
+            np.array(['B', 'B', 'A', 'A', 'B', 'A', 'B', 'B', 'B', 'B', 'B',
+                      'A', 'B', 'B', 'A']),
+            np.array(['A', 'A', 'B', 'B', 'B', 'B', 'A', 'A', 'B', 'A', 'A',
+                      'A']),
+            np.array(['B', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'B']),
+            np.array(['A', 'A', 'A', 'B', 'A', 'A', 'A', 'A', 'A', 'A', 'A',
+                      'A', 'A'])
+        ]
+
+        act_nested_cv_search = test_ml_train.run_nested_CV(
+            KNeighborsClassifier, test_ml_train.x, test_ml_train.y,
+            test_ml_train.sub_classes, ['Feature_3', 'Feature_1'], None, None,
+            'no_balancing', None, 'randomsearch',
+            {'metric': 'minkowski', 'n_jobs': -1},
+            {'n_neighbors': [1, 2, 3], 'weights': ['uniform', 'distance'],
+             'p': np.array([1, 2])}, f1,
+            {accuracy_score: {}, recall_score: {'average': 'micro'}}, 4, 2,
+            'loocv', False, '', True
+        )
+
+        act_outer_loop_params = act_nested_cv_search['outer_loop_params']
+        for index in range(len(exp_outer_loop_params)):
+            self.assertEqual(
+                exp_outer_loop_params[index], act_outer_loop_params[index]
+            )
+
+        act_test_scores = act_nested_cv_search['test_scores']
+        self.assertEqual(
+            list(exp_test_scores.keys()), list(act_test_scores.keys())
+        )
+        for score in exp_test_scores.keys():
+            np.testing.assert_almost_equal(
+                exp_test_scores[score], act_test_scores[score], 7
+            )
+
+        act_average_test_scores = act_nested_cv_search['average_test_scores']
+        self.assertEqual(
+            list(exp_average_test_scores.keys()),
+            list(act_average_test_scores.keys())
+        )
+        for score in exp_average_test_scores.keys():
+            np.testing.assert_almost_equal(
+                exp_average_test_scores[score], act_average_test_scores[score], 7
+
+            )
+
+        act_std_test_scores = act_nested_cv_search['stddev_test_scores']
+        self.assertEqual(
+            list(exp_std_test_scores.keys()),
+            list(act_std_test_scores.keys())
+        )
+        for score in exp_std_test_scores.keys():
+            np.testing.assert_almost_equal(
+                exp_std_test_scores[score], act_std_test_scores[score], 7
+            )
+
+        act_best_params = act_nested_cv_search['best_outer_loop_params']
+        self.assertEqual(
+            list(exp_best_params.keys()), list(act_best_params.keys())
+        )
+        for score in exp_best_params.keys():
+            self.assertEqual(
+                exp_best_params[score], act_best_params[score]
+            )
+
+        act_predictions = act_nested_cv_search['predictions']
+        for index in range(len(exp_predictions)):
+            np.testing.assert_equal(
+                exp_predictions[index], act_predictions[index]
+            )
+
+        # Test run_nested_CV with StratifiedKFold cross-validation
+        exp_outer_loop_params = [OrderedDict({'dual': False,
+                                              'random_state': 1,
+                                              'C': 0.01}),
+                                 OrderedDict({'dual': False,
+                                              'random_state': 1,
+                                              'C': 0.01}),
+                                 OrderedDict({'dual': False,
+                                              'random_state': 1,
+                                              'C': 0.01}),
+                                 OrderedDict({'dual': False,
+                                              'random_state': 1,
+                                              'C': 0.1})]
+        exp_test_scores = OrderedDict({'f1': [0.45833333333333326, 0.1875, 0.3142857142857143, 0.48571428571428577],
+                                       'recall': [0.5384615384615384, 0.23076923076923078, 0.3333333333333333, 0.5]})
+        exp_average_test_scores = OrderedDict({'f1': 0.3614583333333333,
+                                               'recall': 0.4006410256410256})
+        exp_std_test_scores = OrderedDict({'f1': 0.11969864770645951,
+                                           'recall': 0.12475320805146514})
+        exp_best_params = OrderedDict({'f1': OrderedDict({'dual': False,
+                                                          'random_state': 1,
+                                                          'C': 0.1}),
+                                       'recall': OrderedDict({'dual': False,
+                                                              'random_state': 1,
+                                                              'C': 0.01})})
+        exp_predictions = [
+            np.array(['A', 'A', 'A', 'B', 'A', 'A', 'A', 'A', 'B', 'A', 'A',
+                      'A', 'A']),
+            np.array(['A', 'A', 'A', 'A', 'B', 'A', 'A', 'A', 'B', 'A', 'B',
+                      'B', 'A']),
+            np.array(['B', 'B', 'B', 'B', 'B', 'B', 'A', 'B', 'B', 'A', 'A',
+                      'B']),
+            np.array(['A', 'B', 'A', 'A', 'A', 'B', 'B', 'A', 'A', 'B', 'A',
+                      'A'])
+        ]
+
+        act_nested_cv_search = test_ml_train.run_nested_CV(
+            LinearSVC, test_ml_train.x, test_ml_train.y,
+            None, ['Feature_1', 'Feature_2', 'Feature_3'], None, None,
+            'smote', 1, 'gridsearch', {'dual': False, 'random_state': 1},
+            {'C': np.array([0.01, 0.1, 1, 10, 100, 1000, 10000])}, 'accuracy',
+            {f1_score: {'average': 'macro'}, recall_score: {'average': 'micro'}},
+            3, 2, 4, False, '', True
+        )
+
+        act_outer_loop_params = act_nested_cv_search['outer_loop_params']
+        for index in range(len(exp_outer_loop_params)):
+            self.assertEqual(
+                exp_outer_loop_params[index], act_outer_loop_params[index]
+            )
+
+        act_test_scores = act_nested_cv_search['test_scores']
+        self.assertEqual(
+            list(exp_test_scores.keys()), list(act_test_scores.keys())
+        )
+        for score in exp_test_scores.keys():
+            np.testing.assert_almost_equal(
+                exp_test_scores[score], act_test_scores[score], 7
+            )
+
+        act_average_test_scores = act_nested_cv_search['average_test_scores']
+        self.assertEqual(
+            list(exp_average_test_scores.keys()),
+            list(act_average_test_scores.keys())
+        )
+        for score in exp_average_test_scores.keys():
+            np.testing.assert_almost_equal(
+                exp_average_test_scores[score], act_average_test_scores[score], 7
+
+            )
+
+        act_std_test_scores = act_nested_cv_search['stddev_test_scores']
+        self.assertEqual(
+            list(exp_std_test_scores.keys()),
+            list(act_std_test_scores.keys())
+        )
+        for score in exp_std_test_scores.keys():
+            np.testing.assert_almost_equal(
+                exp_std_test_scores[score], act_std_test_scores[score], 7
+            )
+
+        act_best_params = act_nested_cv_search['best_outer_loop_params']
+        self.assertEqual(
+            list(exp_best_params.keys()), list(act_best_params.keys())
+        )
+        for score in exp_best_params.keys():
+            self.assertEqual(
+                exp_best_params[score], act_best_params[score]
+            )
+
+        act_predictions = act_nested_cv_search['predictions']
+        for index in range(len(exp_predictions)):
+            np.testing.assert_equal(
+                exp_predictions[index], act_predictions[index]
+            )
+
+        # Removes directory created by defining RunML object
+        shutil.rmtree('tests/Temp_output')
+
+    def test_run_5x2_CV_combined_F_test(self):
+        """
+        Tests run_5x2_CV_combined_F_test in train.py
+        """
+
+        print('Testing run_5x2_CV_combined_F_test')
+
+        results_dir = 'tests/Temp_output'
+        x = pd.DataFrame({
+            'Feature_1': [5, 9, 8, 1, 3, 5, 10, 6, 7, 1, 8, 9, 1, 10, 2, 2, 8,
+                          7, 1, 3, 8, 4, 3, 4, 4, 6, 2, 10, 4, 5, 1, 7, 10, 3,
+                          10, 6, 3, 8, 1, 4, 6, 1, 5, 2, 2, 1, 7, 1, 2, 4],
+            'Feature_2': [9, 9, 7, 9, 6, 4, 7, 4, 2, 9, 7, 9, 7, 6, 4, 10, 8, 1,
+                          5, 4, 3, 3, 4, 3, 1, 4, 9, 6, 7, 10, 4, 6, 9, 2, 7, 4,
+                          3, 5, 7, 10, 1, 5, 3, 7, 2, 5, 10, 2, 2, 5],
+            'Feature_3': [5, 4, 8, 10, 3, 2, 10, 5, 1, 10, 5, 5, 5, 10, 7, 1, 8,
+                          8, 2, 1, 10, 9, 10, 6, 7, 4, 3, 3, 10, 10, 4, 7, 4, 6,
+                          10, 7, 6, 9, 4, 9, 9, 4, 4, 5, 10, 2, 10, 1, 7, 10]
+        })
+        y = [
+            'A', 'B', 'B', 'A', 'B', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'B',
+            'A', 'A', 'A', 'B', 'B', 'A', 'B', 'A', 'B', 'A', 'A', 'A', 'A',
+            'A', 'A', 'B', 'A', 'A', 'A', 'B', 'A', 'B', 'A', 'B', 'B', 'A',
+            'A', 'B', 'B', 'B', 'A', 'A', 'A', 'B', 'B', 'B', 'B'
+        ]
+        groups = [
+            'A_1', 'B_2', 'B_1', 'A_2', 'B_1', 'B_2', 'A_2', 'A_1', 'B_1',
+            'A_1', 'A_2', 'B_1', 'B_2', 'A_1', 'A_1', 'A_2', 'B_2', 'B_1',
+            'A_1', 'B_2', 'A_2', 'B_2', 'A_2', 'A_2', 'A_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'A_1', 'A_2', 'A_1', 'B_2', 'A_1', 'B_1', 'A_2',
+            'B_2', 'B_2', 'A_1', 'A_1', 'B_1', 'B_1', 'B_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'B_2', 'B_1', 'B_1'
+        ]
+        shuffle = False
+
+        test_ml_train = RunML(results_dir, x, y, groups, shuffle, True)
 
         # Define function arguments
         from sklearn.svm import SVC
@@ -3817,10 +4059,10 @@ class TestClass(unittest.TestCase):
         # Test arguments
         exp_F = 0.7999999999999998
         exp_p = 0.6439069510127531
-        act_F, act_p = test_ml_train.run_5x2_CV_paired_t_test(
-            x_train.to_numpy()[0:40,:], np.array(y_train)[0:40],
-            ['Feature_2', 'Feature_3'], ['Feature_2', 'Feature_3'], SVC,
-            RandomForestClassifier, {'C': 10, 'gamma': 0.01, 'random_state': 1},
+        act_F, act_p = test_ml_train.run_5x2_CV_combined_F_test(
+            x.to_numpy()[0:40,:], np.array(y)[0:40], ['Feature_2', 'Feature_3'],
+            ['Feature_2', 'Feature_3'], SVC, RandomForestClassifier,
+            {'C': 10, 'gamma': 0.01, 'random_state': 1},
             {'n_estimators': 250, 'min_samples_split': 5, 'min_samples_leaf': 2,
              'random_state': 1}, 'max_sampling', 'no_balancing', 2, None, True
         )
