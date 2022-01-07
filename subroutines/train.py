@@ -200,7 +200,7 @@ def make_feat_importance_plots(
     - results_dir: Directory where the plots are to be saved
     - plt_name: Prefix to append to the names of the saved plots
     - test: Boolean describing whether the function is being run during the
-    program's unit tests - by default is set to False
+    program's unit tests
 
     Output
     ----------
@@ -296,10 +296,132 @@ def make_feat_importance_plots(
         )
 
 
+def draw_conf_matrices(y_test, predictions, results_dir, plt_name, test=False):
+    """
+    Draw confusion matrices for y_test vs. predictions
+
+    Input
+    ----------
+    - y_test: Numpy array of real labels
+    - predictions: Numpy array of predicted labels
+    - results_dir: Directory where the plots are to be saved
+    - plt_name: Prefix to append to the names of the saved plots
+    - test: Boolean describing whether the function is being run during the
+    program's unit tests - by default is set to False
+    """
+
+    if type(y_test) != np.ndarray:
+        raise TypeError(
+            'Expect "y_test" to be a (1D) numpy array of the real class labels '
+            ' of the test dataset'
+        )
+
+    if type(predictions) != np.ndarray:
+        raise TypeError(
+            'Expect "predictions" to be a (1D) numpy array of the predicted '
+            'class labels for the test dataset'
+        )
+
+    if len(y_test.shape) != 1:
+        raise ValueError(
+            'Expect "y_test" to be a (1D) numpy array of the real class labels '
+            ' of the test dataset'
+        )
+
+    if len(predictions.shape) != 1:
+        raise ValueError(
+            'Expect "predictions" to be a (1D) numpy array of the predicted '
+            'class labels for the test dataset'
+        )
+
+    if y_test.shape != predictions.shape:
+        raise ValueError(
+            'Mismatch in the number of classes in "y_test" and "predictions"'
+        )
+
+    if not os.path.isdir(results_dir):
+        raise FileNotFoundError(
+            'Directory {} does not exist'.format(results_dir)
+        )
+
+    if type(plt_name) != str:
+        raise TypeError(
+            'Expect "plt_name" to a string to append to the start of the names '
+            'of the saved plots'
+        )
+
+    if os.path.isfile('{}/{}_confusion_matrix.svg'.format(
+        results_dir, plt_name
+    )):
+        raise FileExistsError(
+            'File {}/{}_confusion_matrix.svg already exists - please rename '
+            'this file so it is not overwritten by running this '
+            'function'.format(results_dir, plt_name)
+        )
+
+    if os.path.isfile('{}/{}_recall_confusion_matrix.svg'.format(
+        results_dir, plt_name
+    )):
+        raise FileExistsError(
+            'File {}/{}_recall_confusion_matrix.svg already exists - please '
+            'rename this file so it is not overwritten by running this '
+            'function'.format(results_dir, plt_name)
+        )
+
+    if os.path.isfile('{}/{}_precision_confusion_matrix.svg'.format(
+        results_dir, plt_name
+    )):
+        raise FileExistsError(
+            'File {}/{}_precision_confusion_matrix.svg already exists - please '
+            'rename this file so it is not overwritten by running this '
+            'function'.format(results_dir, plt_name)
+        )
+
+    normalisation_methods = OrderedDict({None: [''],
+                                         'true': ['_recall', 'rows'],
+                                         'pred': ['_precision', 'columns']})
+    for method, method_label in normalisation_methods.items():
+        if not method is None:
+            print('Normalised over {} label ({})'.format(
+                method, method_label[1]
+            ))
+
+        plt.clf()
+        labels = unique_labels(y_test, predictions)
+        # Below ensures that predicted and true labels are on the
+        # correct axes, so think carefully before updating!
+        if method is None:
+            sns.heatmap(
+                data=confusion_matrix(y_true=y_test, y_pred=predictions,
+                                      labels=labels, normalize=method),
+                cmap='RdBu_r', annot=True, xticklabels=True,
+                yticklabels=True, fmt='.3f'
+            )
+        else:
+            sns.heatmap(
+                data=confusion_matrix(y_true=y_test, y_pred=predictions,
+                                      labels=labels, normalize=method),
+                cmap='RdBu_r', annot=True, xticklabels=True,
+                yticklabels=True, fmt='.3f', vmin=0, vmax=1
+            )
+        ax = plt.gca()
+        ax.set(
+            xticklabels=labels, yticklabels=labels, xlabel='Predicted label',
+            ylabel='True label'
+        )
+        plt.xticks(rotation='vertical')
+        plt.yticks(rotation='horizontal')
+        plt.savefig('{}/{}{}_confusion_matrix.svg'.format(
+            results_dir, plt_name, method_label[0]
+        ))
+        if test is False:
+            plt.show()
+
+
 def check_arguments(
     func_name, x_train, y_train, train_groups, x_test, y_test,
-    selected_features, splits, resampling_method, n_components_pca, run,
-    fixed_params, tuned_params, train_scoring_metric, test_scoring_funcs,
+    selected_features, splits, const_split, resampling_method, n_components_pca,
+    run, fixed_params, tuned_params, train_scoring_metric, test_scoring_funcs,
     n_iter, cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
     test=False
 ):
@@ -318,6 +440,9 @@ def check_arguments(
     - selected_features: List of features to include
     - splits: List of train: test splits of the input data (x_train and
     y_train) for cross-validation
+    - const_split: Boolean, if set to True and splits is set to None,
+    function will generate splits using a fixed random_state (=>
+    reproducible results when the function is re-run)
     - resampling_method: Name of the method (string) used to resample the
     data in an imbalanced dataset. Recognised method names are:
     'no_balancing'; 'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
@@ -499,6 +624,11 @@ def check_arguments(
                     'Size of train test splits generated by "splits" does not '
                     'match the number of rows in the input array "x_train"'
                 )
+
+    if type(const_split) != bool:
+        raise TypeError(
+            'Expect "const_split" to be a Boolean (True or False)'
+        )
 
     exp_resampling_methods = [
         'no_balancing', 'max_sampling', 'smote', 'smoteenn', 'smotetomek'
@@ -835,7 +965,9 @@ class RunML(DefData):
                     'NaN detected in subclass values'
                 )
 
-    def split_train_test_data_random(self, x, y, percent_test=0.2, test=False):
+    def split_train_test_data_random(
+        self, x, y, const_split=False, percent_test=0.2, test=False
+    ):
         """
         Splits data at random into training and test sets
 
@@ -843,6 +975,9 @@ class RunML(DefData):
         ----------
         - x: Numpy array of x values
         - y: Numpy array of y values
+        - const_split: Boolean, if set to True and splits is set to None,
+        function will generate splits using a fixed random_state (=>
+        reproducible results when the function is re-run)
         - percent_test: Float in the range 0-0.5, defines the fraction of the
         total data to be set aside for model testing
         - test: Boolean describing whether the function is being run during the
@@ -867,7 +1002,10 @@ class RunML(DefData):
             raise ValueError(
                 'Mismatch in the dimensions of the input "x" and "y" values'
             )
-
+        if type(const_split) != bool:
+            raise TypeError(
+                'Expect "const_split" to be a Boolean (True or False)'
+            )
         if not type(percent_test) in [int, float]:
             raise TypeError(
                 '"percent_test" argument should be set to a float in the range '
@@ -881,13 +1019,13 @@ class RunML(DefData):
                 )
 
         if percent_test > 0:
-            if test is False:
+            if test is True or const_split is True:
                 skf = StratifiedKFold(
-                    n_splits=round(1/percent_test), shuffle=True
+                    n_splits=round(1/percent_test), shuffle=True, random_state=0
                 )
             else:
                 skf = StratifiedKFold(
-                    n_splits=round(1/percent_test), shuffle=True, random_state=0
+                    n_splits=round(1/percent_test), shuffle=True
                 )
             split = [sub_split for sub_split in list(skf.split(X=x, y=y))[0]]
         elif percent_test == 0:
@@ -955,8 +1093,8 @@ class RunML(DefData):
         return split
 
     def calc_feature_correlations(
-        self, fluor_data=None, correlation_coeff='kendall',
-        plt_name='', abs_vals=True, test=False
+        self, fluor_data=None, correlation_coeff='kendall', plt_name='',
+        abs_vals=True, test=False
     ):
         """
         Calculates correlation coefficient values between all 2-way combinations
@@ -1081,7 +1219,10 @@ class RunML(DefData):
 
         Output
         ----------
-        - importance_df: DataFrame of features and their importance scores
+        - importance_df: DataFrame of features and their mean average importance
+        scores
+        - univ_feature_importances: Dictionary of features and their importance
+        scores across num_repeats
         """
 
         # Checks argument values are suitable for running the function
@@ -1181,14 +1322,19 @@ class RunML(DefData):
                 univ_feature_importances[col][n] = importance
 
         plt_name = '{}_KBest'.format(plt_name)
-        (
-            importance_df, cols, cols_all, all_vals, median_vals,
-            lower_conf_limit_vals, upper_conf_limit_vals
-        ) = make_feat_importance_plots(
-            univ_feature_importances, self.results_dir, plt_name, test
-        )
+        if test is False:
+            importance_df = make_feat_importance_plots(
+                univ_feature_importances, self.results_dir, plt_name, test
+            )
+        else:
+            (
+                importance_df, cols, cols_all, all_vals, median_vals,
+                lower_conf_limit_vals, upper_conf_limit_vals
+            ) = make_feat_importance_plots(
+                    univ_feature_importances, self.results_dir, plt_name, test
+                )
 
-        return importance_df
+        return importance_df, univ_feature_importances
 
     def calc_feature_importances_tree(
         self, x=None, y=None, features=None, num_repeats=1000, scale=True,
@@ -1226,7 +1372,10 @@ class RunML(DefData):
 
         Output
         ----------
-        - importance_df: DataFrame of features and their importance scores
+        - importance_df: DataFrame of features and their mean average importance
+        scores
+        - tree_feature_importances: Dictionary of features and their importance
+        scores across num_repeats
         """
 
         # Checks argument values are suitable for running the function
@@ -1303,7 +1452,10 @@ class RunML(DefData):
             # Uses bootstrapping to create a "new" dataset
             temp_x, temp_y = bootstrap_data(x, y, features, scale, test)
 
-            model = ExtraTreesClassifier()
+            if test is False:
+                model = ExtraTreesClassifier()
+            else:
+                model = ExtraTreesClassifier(random_state=1)
             model.fit(X=temp_x, y=temp_y)
             feature_importances = model.feature_importances_
 
@@ -1312,14 +1464,19 @@ class RunML(DefData):
                 tree_feature_importances[col][n] = importance
 
         plt_name = '{}_Tree'.format(plt_name)
-        (
-            importance_df, cols, cols_all, all_vals, median_vals,
-            lower_conf_limit_vals, upper_conf_limit_vals
-         ) = make_feat_importance_plots(
-            tree_feature_importances, self.results_dir, plt_name, test
-        )
+        if test is False:
+            importance_df = make_feat_importance_plots(
+                tree_feature_importances, self.results_dir, plt_name, test
+            )
+        else:
+            (
+                importance_df, cols, cols_all, all_vals, median_vals,
+                lower_conf_limit_vals, upper_conf_limit_vals
+            ) = make_feat_importance_plots(
+                    tree_feature_importances, self.results_dir, plt_name, test
+                )
 
-        return importance_df
+        return importance_df, tree_feature_importances
 
     def calc_feature_importances_permutation(
         self, x=None, y=None, features=None, classifier=AdaBoostClassifier,
@@ -1369,7 +1526,10 @@ class RunML(DefData):
 
         Output
         ----------
-        - importance_df: DataFrame of features and their importance scores
+        - importance_df: DataFrame of features and their mean average importance
+        scores
+        - permutation_feature_importances: Dictionary of features and their
+        importance scores across num_repeats
         """
 
         # Checks argument values are suitable for running the function
@@ -1435,12 +1595,15 @@ class RunML(DefData):
             'roc_auc_ovr', 'roc_auc_ovo','roc_auc_ovr_weighted',
             'roc_auc_ovo_weighted'
         ]
-        if not model_metric in metrics_list:
-            raise ValueError(
-                'Value provided for "model_metric" not recognised - please '
-                'specify one of the strings in the list below:\n'
-                '{}'.format(metrics_list)
-            )
+        if type(model_metric) == sklearn.metrics._scorer._PredictScorer:
+            pass
+        else:
+            if not model_metric in metrics_list:
+                raise ValueError(
+                    'Value provided for "model_metric" not recognised - please '
+                    'specify one of the strings in the list below:\n'
+                    '{}'.format(metrics_list)
+                )
 
         if type(num_repeats) != int:
             raise TypeError(
@@ -1517,24 +1680,32 @@ class RunML(DefData):
                 permutation_feature_importances[col][n] = importance
 
         plt_name = '{}_Permutation'.format(plt_name)
-        (
-            importance_df, cols, cols_all, all_vals, median_vals,
-            lower_conf_limit_vals, upper_conf_limit_vals
-         ) = make_feat_importance_plots(
-            permutation_feature_importances, self.results_dir, plt_name, test
-        )
+        if test is False:
+            importance_df = make_feat_importance_plots(
+                permutation_feature_importances, self.results_dir, plt_name,
+                test
+            )
+        else:
+            (
+                importance_df, cols, cols_all, all_vals, median_vals,
+                lower_conf_limit_vals, upper_conf_limit_vals
+            ) = make_feat_importance_plots(
+                    permutation_feature_importances, self.results_dir, plt_name,
+                    test
+                )
 
-        return importance_df
+        return importance_df, permutation_feature_importances
 
-    def run_pca(self, x=None, scale=True, plt_name='', test=False):
+    def run_pca(self, fluor_data=None, scale=True, plt_name='', test=False):
         """
         Runs Principal Component Analysis and makes scatter plot of number of
-        components vs. amount of information captured
+        components vs. amount of information captured, Calculates the
+        contribution of each feature to each principal component.
 
         Input
         ----------
-        - x: Numpy array of x values. By default set to self.x.
-        - y: Numpy array of y values. By default set to self.y.
+        - fluor_data: DataFrame of fluorescence readings. By default set to
+        self.fluor_data
         - scale: Boolean, defines whether to scale the data (by subtracting the
         median and dividing by the IQR) before calculating feature importances.
         By default is set to True since scaling the data will affect the PCA.
@@ -1548,17 +1719,20 @@ class RunML(DefData):
         """
 
         # Checks argument values are suitable for running the function
-        if x is None:
-            x = copy.deepcopy(self.x)
+        if fluor_data is None:
+            fluor_data = copy.deepcopy(self.fluor_data)
 
-        if type(x) != np.ndarray:
+        if type(fluor_data) != pd.DataFrame:
             raise TypeError(
-                'Expect "x" to be a (2D) array of fluorescence readings'
+                'Expect "fluor_data" to be dataframe of fluorescence readings'
             )
 
-        if len(x.shape) != 2:
+        if fluor_data.applymap(
+            lambda x: isinstance(x, (int, float))).all(axis=None, skipna=False
+        ) is np.bool_(False):
             raise ValueError(
-                'Expect "x" to be a (2D) array of fluorescence readings'
+                'Non-numeric value(s) in "fluor_data" - expect all values in '
+                '"fluor_data" to be integers / floats'
             )
 
         if type(scale) != bool:
@@ -1568,6 +1742,7 @@ class RunML(DefData):
             raise TypeError('"plt_name" should be a string value')
 
         # Runs PCA
+        x = fluor_data.to_numpy()
         if scale is True:
             x = RobustScaler().fit_transform(x)
 
@@ -1588,7 +1763,27 @@ class RunML(DefData):
         if test is False:
             plt.show()
 
-        return model
+        # Calculates contribution of each feature to each principal component
+        features = list(fluor_data.columns)
+        pca_components = OrderedDict(
+            {'Component': [int(n) for n in range(1, len(features)+1)]}
+        )
+        for index, feature in enumerate(features):
+            pca_components[feature] = model.components_[:,index]
+        pca_components = pd.DataFrame(pca_components)
+        pca_components = pca_components.set_index('Component', drop=True)
+
+        sns.heatmap(
+            data=pca_components.abs(), cmap='RdBu_r', annot=True,
+            xticklabels=True, yticklabels=True
+        )
+        plt.savefig('{}/{}PCA_component_heatmap.svg'.format(
+            self.results_dir, plt_name
+        ))
+        if test is False:
+            plt.show()
+
+        return model, pca_components
 
     def plot_scatter_on_pca_axes(
         self, x=None, y=None, subclasses=None, num_dimensions=2, scale=True,
@@ -1735,6 +1930,8 @@ class RunML(DefData):
                     X_reduced[i[0],0], X_reduced[i[0],1], c=cat_colours[y_val],
                     marker=cat_markers[y_val]
                 )
+            ax.set_xlabel('Principal component 1')
+            ax.set_ylabel('Principal component 2')
         elif num_dimensions == 3:
             ax = fig.add_subplot(111, projection='3d')
             for i, y_val in np.ndenumerate(plot_y):
@@ -1742,6 +1939,9 @@ class RunML(DefData):
                     X_reduced[i[0],0], X_reduced[i[0],1], X_reduced[i[0],2],
                     c=cat_colours[y_val], marker=cat_markers[y_val]
                 )
+            ax.set_xlabel('Principal component 1')
+            ax.set_ylabel('Principal component 2')
+            ax.set_zlabel('Principal component 3')
 
         legend_elements = []
         for cat, colour in cat_colours.items():
@@ -1750,7 +1950,9 @@ class RunML(DefData):
                 Line2D([0], [0], marker=marker, color=colour, label=cat,
                 markerfacecolor=colour)
             )
-        ax.legend(handles=legend_elements, loc='upper right', title='Classes')
+        ax.legend(
+            handles=legend_elements, bbox_to_anchor=(1.05, 1), title='Classes'
+        )
 
         plt.savefig('{}/{}_{}_PCA_plot.svg'.format(
             self.results_dir, plt_name, str(num_dimensions)
@@ -1779,7 +1981,8 @@ class RunML(DefData):
         """
 
         if type(classifier).__name__ == 'LogisticRegression':
-            params = OrderedDict({'n_jobs': -1})
+            params = OrderedDict({'n_jobs': -1,
+                                  'max_iter': 1000})
         elif type(classifier).__name__ == 'KNeighborsClassifier':
             params = OrderedDict({'metric': 'minkowski',
                                   'n_jobs': -1})
@@ -1864,13 +2067,13 @@ class RunML(DefData):
                     'p': np.array([1, 2])
                 })
         elif type(classifier).__name__ == 'LinearSVC':
-            params = OrderedDict({'C': np.logspace(-5, 15, num=41, base=2)})
+            params = OrderedDict({'C': np.logspace(-5, 15, num=21, base=2)})
         elif type(classifier).__name__ == 'SVC':
             # For speed reasons (some kernels take a prohibitively long time to
             # train) am sticking with the default kernel ('rbf')
             params = OrderedDict({
-                'C': np.logspace(-5, 15, num=41, base=2),
-                'gamma': np.logspace(-15, 3, num=37, base=2),
+                'C': np.logspace(-5, 15, num=21, base=2),
+                'gamma': np.logspace(-15, 3, num=19, base=2),
                 'kernel': ['rbf']
             })
         elif type(classifier).__name__ == 'AdaBoostClassifier':
@@ -2076,7 +2279,7 @@ class RunML(DefData):
             func_name='run_randomised_search', x_train=x_train, y_train=y_train,
             train_groups=train_groups, x_test=np.array([]), y_test=np.array([]),
             selected_features=selected_features, splits=splits,
-            resampling_method=resampling_method,
+            const_split=True, resampling_method=resampling_method,
             n_components_pca=n_components_pca, run='randomsearch',
             fixed_params={}, tuned_params=params,
             train_scoring_metric=scoring_metric,
@@ -2208,7 +2411,8 @@ class RunML(DefData):
             func_name='run_grid_search', x_train=x_train, y_train=y_train,
             train_groups=train_groups, x_test=np.array([]), y_test=np.array([]),
             selected_features=selected_features,
-            splits=splits, resampling_method=resampling_method,
+            splits=splits, const_split=True,
+            resampling_method=resampling_method,
             n_components_pca=n_components_pca, run='gridsearch',
             fixed_params={}, tuned_params=params,
             train_scoring_metric=scoring_metric,
@@ -2299,7 +2503,8 @@ class RunML(DefData):
         check_arguments(
             func_name='train_model', x_train=x_train, y_train=y_train,
             train_groups=None, x_test=np.array([]), y_test=np.array([]),
-            selected_features=selected_features, splits=[(y_train, np.array([]))],
+            selected_features=selected_features,
+            splits=[(y_train, np.array([]))], const_split=True,
             resampling_method=resampling_method,
             n_components_pca=n_components_pca, run='train', fixed_params={},
             tuned_params={}, train_scoring_metric='accuracy',
@@ -2382,9 +2587,9 @@ class RunML(DefData):
             func_name='test_model', x_train=np.array([]), y_train=np.array([]),
             train_groups=None, x_test=x_test, y_test=y_test,
             selected_features=[], splits=[(np.array([]), np.array([]))],
-            resampling_method='no_balancing', n_components_pca=None,
-            run='randomsearch', fixed_params={}, tuned_params={},
-            train_scoring_metric='accuracy',
+            const_split=True, resampling_method='no_balancing',
+            n_components_pca=None, run='randomsearch', fixed_params={},
+            tuned_params={}, train_scoring_metric='accuracy',
             test_scoring_funcs=test_scoring_funcs, n_iter=None,
             cv_folds_inner_loop=5, cv_folds_outer_loop='loocv',
             draw_conf_mat=draw_conf_mat, plt_name=plt_name, test=test
@@ -2413,44 +2618,19 @@ class RunML(DefData):
 
         # Generates confusion matrices
         if draw_conf_mat is True:
-            normalisation_methods = OrderedDict({None: [''],
-                                                 'true': ['_recall', 'rows'],
-                                                 'pred': ['_precision', 'columns']})
-            for method, method_label in normalisation_methods.items():
-                if method is not None:
-                    print('Normalised over {} label ({})'.format(
-                        method, method_label[1]
-                    ))
-
-                plt.clf()
-                labels = unique_labels(y_test, predictions)
-                # Below ensures that predicted and true labels are on the
-                # correct axes, so think carefully before updating!
-                sns.heatmap(
-                    data=confusion_matrix(y_true=y_test, y_pred=predictions,
-                                          labels=labels, normalize=method),
-                    cmap='RdBu_r', annot=True, xticklabels=True,
-                    yticklabels=True, fmt='.3f'
-                )
-                ax = plt.gca()
-                ax.set(xticklabels=labels, yticklabels=labels,
-                       xlabel='Predicted label', ylabel='True label')
-                plt.xticks(rotation='vertical')
-                plt.yticks(rotation='horizontal')
-                plt.savefig('{}/{}{}{}_confusion_matrix.svg'.format(
-                    self.results_dir, plt_name, type(clf).__name__,
-                    method_label[0]
-                ))
-                if test is False:
-                    plt.show()
+            plt_name = '{}{}'.format(plt_name, type(clf).__name__)
+            draw_conf_matrices(
+                y_test, predictions, self.results_dir, plt_name, test
+            )
 
         return predictions, test_scores
 
     def run_ml(
         self, clf, x_train, y_train, train_groups, x_test, y_test,
-        selected_features, splits, resampling_method, n_components_pca, run,
-        params, train_scoring_metric, test_scoring_funcs={}, n_iter=None,
-        cv_folds=5, draw_conf_mat=True, plt_name='', test=False
+        selected_features, splits, const_split, resampling_method,
+        n_components_pca, run, params, train_scoring_metric,
+        test_scoring_funcs={}, n_iter=None, cv_folds=5, draw_conf_mat=True,
+        plt_name='', test=False
     ):
         """
         Function to either test a range of parameter combinations with
@@ -2472,6 +2652,9 @@ class RunML(DefData):
         (x_train and y_train) for cross-validation, or set to None (in which
         case run_ml runs stratified k-folds/group k-folds in sklearn to
         construct the list, as directed by "cv_folds")
+        - const_split: Boolean, if set to True and splits is set to None,
+        function will generate splits using a fixed random_state (=>
+        reproducible results when the function is re-run)
         - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
@@ -2538,7 +2721,7 @@ class RunML(DefData):
             func_name='run_ml', x_train=x_train, y_train=y_train,
             train_groups=train_groups, x_test=x_test, y_test=y_test,
             selected_features=selected_features, splits=check_splits,
-            resampling_method=resampling_method,
+            const_split=const_split, resampling_method=resampling_method,
             n_components_pca=n_components_pca, run=run, fixed_params={},
             tuned_params=params, train_scoring_metric=train_scoring_metric,
             test_scoring_funcs=test_scoring_funcs, n_iter=n_iter,
@@ -2558,12 +2741,12 @@ class RunML(DefData):
                 )
 
             if train_groups is None:
-                if test is False:
-                    skf = StratifiedKFold(n_splits=cv_folds, shuffle=True)
-                else:
+                if test is True or const_split is True:
                     skf = StratifiedKFold(
                         n_splits=cv_folds, shuffle=True, random_state=1
                     )
+                else:
+                    skf = StratifiedKFold(n_splits=cv_folds, shuffle=True)
                 splits = list(skf.split(X=x_train, y=y_train))
             else:
                 gkf = GroupKFold(n_splits=cv_folds)
@@ -2599,8 +2782,8 @@ class RunML(DefData):
 
     def run_nested_CV(
         self, clf, x, y, groups, selected_features, inner_splits, outer_splits,
-        resampling_method, n_components_pca, run, fixed_params, tuned_params,
-        train_scoring_metric, test_scoring_funcs, n_iter=None,
+        const_split, resampling_method, n_components_pca, run, fixed_params,
+        tuned_params, train_scoring_metric, test_scoring_funcs, n_iter=None,
         cv_folds_inner_loop=5, cv_folds_outer_loop='loocv', draw_conf_mat=False,
         plt_name='', test=False
     ):
@@ -2626,6 +2809,9 @@ class RunML(DefData):
         and y) for cross-validation, or set to None (in which case run_nested_CV
         runs leave-one-out cross-validation/stratified k-folds/group k-folds in
         sklearn to construct the generator)
+        - const_split: Boolean, if set to True and splits is set to None,
+        function will generate splits using a fixed random_state (=>
+        reproducible results when the function is re-run)
         - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
@@ -2690,7 +2876,7 @@ class RunML(DefData):
             func_name='run_nested_CV', x_train=x, y_train=y,
             train_groups=groups, x_test=np.array([]), y_test=np.array([]),
             selected_features=selected_features, splits=check_splits,
-            resampling_method=resampling_method,
+            const_split=const_split, resampling_method=resampling_method,
             n_components_pca=n_components_pca, run=run,
             fixed_params=fixed_params, tuned_params=tuned_params,
             train_scoring_metric=train_scoring_metric,
@@ -2738,14 +2924,14 @@ class RunML(DefData):
                     )
                 # Generates splits
                 if groups is None:
-                    if test is False:
-                        skf = StratifiedKFold(
-                            n_splits=cv_folds_outer_loop, shuffle=True
-                        )
-                    else:
+                    if test is True or const_split is True:
                         skf = StratifiedKFold(
                             n_splits=cv_folds_outer_loop, shuffle=True,
                             random_state=1
+                        )
+                    else:
+                        skf = StratifiedKFold(
+                            n_splits=cv_folds_outer_loop, shuffle=True
                         )
                     outer_splits = list(skf.split(X=x, y=y))
                 else:
@@ -2759,7 +2945,7 @@ class RunML(DefData):
             y_train = copy.deepcopy(y)[train_split]
             x_test = copy.deepcopy(x)[test_split]
             y_test = copy.deepcopy(y)[test_split]
-            if groups is not None:
+            if not groups is None:
                 train_groups = copy.deepcopy(groups)[train_split]
             else:
                 train_groups = None
@@ -2768,7 +2954,7 @@ class RunML(DefData):
             train_clf = clf(**fixed_params)
             search = self.run_ml(
                 train_clf, x_train, y_train, train_groups, np.array([]),
-                np.array([]), selected_features, inner_splits,
+                np.array([]), selected_features, inner_splits, const_split,
                 resampling_method, n_components_pca, run, tuned_params,
                 train_scoring_metric, {}, n_iter, cv_folds_inner_loop,
                 draw_conf_mat, '', test
@@ -2784,9 +2970,10 @@ class RunML(DefData):
             best_params = OrderedDict({**fixed_params, **best_params})
             fold_search, fold_predictions, fold_test_scores = self.run_ml(
                 clf, x_train, y_train, train_groups, x_test, y_test,
-                selected_features, None, resampling_method, n_components_pca,
-                'train', best_params, train_scoring_metric, test_scoring_funcs,
-                None, cv_folds_inner_loop, draw_conf_mat, plt_name, test
+                selected_features, None, const_split, resampling_method,
+                n_components_pca, 'train', best_params, train_scoring_metric,
+                test_scoring_funcs, None, cv_folds_inner_loop, draw_conf_mat,
+                plt_name, test
             )
 
             nested_cv_search['outer_loop_params'].append(best_params)
@@ -2901,7 +3088,8 @@ class RunML(DefData):
             func_name='run_5x2_CV_combined_F_test', x_train=x, y_train=y,
             train_groups=None, x_test=np.array([]), y_test=np.array([]),
             selected_features=selected_features_1,
-            splits=[(y, np.array([]))], resampling_method=resampling_method_1,
+            splits=[(y, np.array([]))], const_split=True,
+            resampling_method=resampling_method_1,
             n_components_pca=n_components_pca_1, run='randomsearch',
             fixed_params=params_1, tuned_params={},
             train_scoring_metric='accuracy', test_scoring_funcs={}, n_iter=None,
@@ -2912,7 +3100,8 @@ class RunML(DefData):
             func_name='run_5x2_CV_combined_F_test', x_train=x, y_train=y,
             train_groups=None, x_test=np.array([]), y_test=np.array([]),
             selected_features=selected_features_2,
-            splits=[(y, np.array([]))], resampling_method=resampling_method_2,
+            splits=[(y, np.array([]))], const_split=True,
+            resampling_method=resampling_method_2,
             n_components_pca=n_components_pca_2, run='randomsearch',
             fixed_params=params_2, tuned_params={},
             train_scoring_metric='accuracy', test_scoring_funcs={}, n_iter=None,

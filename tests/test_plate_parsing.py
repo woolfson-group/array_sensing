@@ -1954,7 +1954,7 @@ class TestClass(unittest.TestCase):
                 scale_method='analyte_fluorophore', draw_plot=True, plot_dir_name=''
             )
             test_parsing.combine_plate_readings(same_num_repeats=False)
-            test_parsing.display_data_distribution()
+            test_parsing.display_data_distribution(test=True)
             act_stats_dict = test_parsing.run_anova()
 
             # Run at the end to check that values aren't updated during the run

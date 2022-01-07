@@ -454,6 +454,7 @@ class TestClass(unittest.TestCase):
         y_test = np.array([])
         selected_features = []
         splits = [(y_train, np.array([]))]
+        const_split = True
         resampling_method = 'no_balancing'
         n_components_pca = None
         run = 'randomsearch'
@@ -470,10 +471,11 @@ class TestClass(unittest.TestCase):
         # "Recognised" parameter values should not raise an exception
         output_str = check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(output_str, 'All checks passed')
 
@@ -482,10 +484,11 @@ class TestClass(unittest.TestCase):
         x_train_str = ''
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train_str, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), 'Expect "x_train" to be a numpy array of '
@@ -496,10 +499,11 @@ class TestClass(unittest.TestCase):
         y_train_str = ''
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train_str, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), 'Expect "y_train" to be a numpy array of '
@@ -510,10 +514,11 @@ class TestClass(unittest.TestCase):
         train_groups_str = ''
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups_str, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), 'Expect "train_groups" to be a numpy array '
@@ -524,10 +529,11 @@ class TestClass(unittest.TestCase):
         x_test_str = ''
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test_str, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), 'Expect "x_test" to be a numpy array of '
@@ -538,10 +544,11 @@ class TestClass(unittest.TestCase):
         y_test_str = ''
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test_str,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), 'Expect "y_test" to be a numpy array of '
@@ -553,7 +560,7 @@ class TestClass(unittest.TestCase):
         y_train_array = np.array([[2, 2], [2, 2], [2, 2], [2, 2]])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups, x_test,
-            y_test, selected_features, splits, resampling_method,
+            y_test, selected_features, splits, const_split, resampling_method,
             n_components_pca, run, fixed_params, tuned_params,
             train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -568,7 +575,7 @@ class TestClass(unittest.TestCase):
         y_train_array = np.array([2, 2, 2, 2, 2])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups, x_test,
-            y_test, selected_features, splits, resampling_method,
+            y_test, selected_features, splits, const_split, resampling_method,
             n_components_pca, run, fixed_params, tuned_params,
             train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -585,9 +592,9 @@ class TestClass(unittest.TestCase):
         train_groups_array = np.array([[3], [3], [3], [3]])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
-            x_test, y_test, selected_features, splits, resampling_method,
-            n_components_pca, run, fixed_params, tuned_params,
-            train_scoring_metric, test_scoring_funcs, n_iter,
+            x_test, y_test, selected_features, splits, const_split,
+            resampling_method, n_components_pca, run, fixed_params,
+            tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
             True
         )
@@ -601,9 +608,9 @@ class TestClass(unittest.TestCase):
         train_groups_array = np.array([3, 3, 3])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
-            x_test, y_test, selected_features, splits, resampling_method,
-            n_components_pca, run, fixed_params, tuned_params,
-            train_scoring_metric, test_scoring_funcs, n_iter,
+            x_test, y_test, selected_features, splits, const_split,
+            resampling_method, n_components_pca, run, fixed_params,
+            tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
             True
         )
@@ -617,9 +624,9 @@ class TestClass(unittest.TestCase):
         y_test_array = np.array([[5, 5], [5, 5], [5, 5], [5, 5]])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test_array,
-            y_test_array, selected_features, splits, resampling_method,
-            n_components_pca, run, fixed_params, tuned_params,
-            train_scoring_metric, test_scoring_funcs, n_iter,
+            y_test_array, selected_features, splits, const_split,
+            resampling_method, n_components_pca, run, fixed_params,
+            tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
             True
         )
@@ -632,9 +639,9 @@ class TestClass(unittest.TestCase):
         y_test_array = np.array([5, 5, 5, 5, 5, 5])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test_array,
-            y_test_array, selected_features, splits, resampling_method,
-            n_components_pca, run, fixed_params, tuned_params,
-            train_scoring_metric, test_scoring_funcs, n_iter,
+            y_test_array, selected_features, splits, const_split,
+            resampling_method, n_components_pca, run, fixed_params,
+            tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
             True
         )
@@ -651,7 +658,7 @@ class TestClass(unittest.TestCase):
         y_test_array = np.array([5, 5])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
-            x_test_array, y_test_array, selected_features, splits,
+            x_test_array, y_test_array, selected_features, splits, const_split,
             resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -670,7 +677,7 @@ class TestClass(unittest.TestCase):
         y_test_array = np.array([5, 5])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
-            x_test_array, y_test_array, selected_features, splits,
+            x_test_array, y_test_array, selected_features, splits, const_split,
             resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -688,7 +695,7 @@ class TestClass(unittest.TestCase):
         y_test_array = np.array([5, 5])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
-            x_test_array, y_test_array, selected_features, splits,
+            x_test_array, y_test_array, selected_features, splits, const_split,
             resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -707,7 +714,7 @@ class TestClass(unittest.TestCase):
         y_test_array = np.array([5, 5])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
-            x_test_array, y_test_array, selected_features, splits,
+            x_test_array, y_test_array, selected_features, splits, const_split,
             resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -725,7 +732,7 @@ class TestClass(unittest.TestCase):
         y_test_array = np.array([5, 5])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
-            x_test_array, y_test_array, selected_features, splits,
+            x_test_array, y_test_array, selected_features, splits, const_split,
             resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -743,7 +750,7 @@ class TestClass(unittest.TestCase):
         y_test_array = np.array([5, 5])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
-            x_test_array, y_test_array, selected_features, splits,
+            x_test_array, y_test_array, selected_features, splits, const_split,
             resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -761,7 +768,7 @@ class TestClass(unittest.TestCase):
         y_test_array = np.array([5, 5])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
-            x_test_array, y_test_array, selected_features, splits,
+            x_test_array, y_test_array, selected_features, splits, const_split,
             resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -780,7 +787,7 @@ class TestClass(unittest.TestCase):
         y_test_array = np.array([5, np.nan])
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
-            x_test_array, y_test_array, selected_features, splits,
+            x_test_array, y_test_array, selected_features, splits, const_split,
             resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
@@ -794,10 +801,11 @@ class TestClass(unittest.TestCase):
         selected_features_str = 'X'
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features_str, splits, resampling_method, n_components_pca,
-            run, fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features_str, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), 'Expect "selected_features" to be a list of'
@@ -815,7 +823,7 @@ class TestClass(unittest.TestCase):
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
             x_test_array, y_test_array, selected_features_list, splits,
-            resampling_method, n_components_pca, run, fixed_params,
+            const_split, resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
             True
@@ -837,7 +845,7 @@ class TestClass(unittest.TestCase):
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
             x_test_array, y_test_array, selected_features_list, splits,
-            resampling_method, n_components_pca, run, fixed_params,
+            const_split, resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
             True
@@ -859,7 +867,7 @@ class TestClass(unittest.TestCase):
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
             x_test_array, y_test_array, selected_features_list, splits_gen,
-            resampling_method, n_components_pca, run, fixed_params,
+            const_split, resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
             True
@@ -882,7 +890,7 @@ class TestClass(unittest.TestCase):
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
             x_test_array, y_test_array, selected_features_list, splits_list,
-            resampling_method, n_components_pca, run, fixed_params,
+            const_split, resampling_method, n_components_pca, run, fixed_params,
             tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
             cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
             True
@@ -893,14 +901,30 @@ class TestClass(unittest.TestCase):
             '"x_train"'
         )
 
+        # Tests const_split type
+        const_split_int = 1
+        with self.assertRaises(TypeError) as message: check_arguments(
+            'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
+            selected_features, splits, const_split_int, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
+        )
+        self.assertEqual(
+            str(message.exception), 'Expect "const_split" to be a Boolean (True'
+            ' or False)'
+        )
+
         # Tests resampling_method is recognised
         resampling_method_str = ''
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method_str, n_components_pca,
-            run, fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method_str,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), '"resampling_method" unrecognised - expect '
@@ -912,10 +936,11 @@ class TestClass(unittest.TestCase):
         n_components_pca_str = 2.0
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca_str,
-            run, fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca_str, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), 'Expect "n_components_pca" to be set either'
@@ -938,10 +963,10 @@ class TestClass(unittest.TestCase):
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train_array, y_train_array, train_groups_array,
             x_test_array, y_test_array, selected_features_list, splits_list,
-            resampling_method, n_components_pca_int, run, fixed_params,
-            tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
-            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
-            True
+            const_split, resampling_method, n_components_pca_int, run,
+            fixed_params, tuned_params, train_scoring_metric,
+            test_scoring_funcs, n_iter, cv_folds_inner_loop,
+            cv_folds_outer_loop, draw_conf_mat, plt_name, True
         )
         self.assertEqual(
             str(message.exception), 'Expect "n_components_pca" to be set either'
@@ -965,10 +990,10 @@ class TestClass(unittest.TestCase):
         with self.assertRaises(ValueError) as message: check_arguments(
             'run_ml', x_train_array, y_train_array, train_groups_array,
             x_test_array, y_test_array, selected_features_list, splits_list,
-            resampling_method, n_components_pca_int, run_str, fixed_params,
-            tuned_params, train_scoring_metric, test_scoring_funcs, n_iter,
-            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
-            True
+            const_split, resampling_method, n_components_pca_int, run_str,
+            fixed_params, tuned_params, train_scoring_metric,
+            test_scoring_funcs, n_iter, cv_folds_inner_loop,
+            cv_folds_outer_loop, draw_conf_mat, plt_name, True
         )
         self.assertEqual(
             str(message.exception), 'Expect "run" to be set to either '
@@ -980,10 +1005,11 @@ class TestClass(unittest.TestCase):
         run_str = 'train'
         with self.assertRaises(ValueError) as message: check_arguments(
             'run_nested_CV', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca,
-            run_str, fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run_str, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), 'Expect "run" to be set to either '
@@ -994,10 +1020,11 @@ class TestClass(unittest.TestCase):
         fixed_params_df = pd.DataFrame({})
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params_df, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params_df, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), 'Expect "fixed_params" to be a dictionary '
@@ -1022,10 +1049,10 @@ class TestClass(unittest.TestCase):
         with self.assertRaises(TypeError) as message: check_arguments(
             'run_ml', x_train_array, y_train_array, train_groups_array,
             x_test_array, y_test_array, selected_features_list, splits_list,
-            resampling_method, n_components_pca_int, run_str, fixed_params_dict,
-            tuned_params_list, train_scoring_metric, test_scoring_funcs, n_iter,
-            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
-            True
+            const_split, resampling_method, n_components_pca_int, run_str,
+            fixed_params_dict, tuned_params_list, train_scoring_metric,
+            test_scoring_funcs, n_iter, cv_folds_inner_loop,
+            cv_folds_outer_loop, draw_conf_mat, plt_name, True
         )
         self.assertEqual(
             str(message.exception), 'Expect "tuned_params" to be a dictionary '
@@ -1039,10 +1066,11 @@ class TestClass(unittest.TestCase):
         # for clustering, not classification
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric_str,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric_str, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), '"train_scoring_metric" not recogised - '
@@ -1069,10 +1097,11 @@ class TestClass(unittest.TestCase):
                                    jaccard_score: {'average': 'weighted'}}
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric_func,
-            test_scoring_funcs_dict, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric_func, test_scoring_funcs_dict, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), 'Scoring function jaccard_score not '
@@ -1085,10 +1114,11 @@ class TestClass(unittest.TestCase):
         n_iter_float = 3.0
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter_float, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter_float,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), '"n_iter" should be set to a positive '
@@ -1099,10 +1129,11 @@ class TestClass(unittest.TestCase):
         n_iter_int = -2
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter_int, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter_int,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
         )
         self.assertEqual(
             str(message.exception), '"n_iter" should be set to a positive '
@@ -1113,10 +1144,11 @@ class TestClass(unittest.TestCase):
         cv_folds_inner_loop_dict = OrderedDict()
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop_dict,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop_dict, cv_folds_outer_loop, draw_conf_mat,
+            plt_name, True
         )
         self.assertEqual(
             str(message.exception), 'Expect "cv_folds_inner_loop" to be a '
@@ -1127,10 +1159,11 @@ class TestClass(unittest.TestCase):
         cv_folds_inner_loop_int = 11
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop_int,
-            cv_folds_outer_loop, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop_int, cv_folds_outer_loop, draw_conf_mat,
+            plt_name, True
         )
         self.assertEqual(
             str(message.exception), 'Expect "cv_folds_inner_loop" to be a '
@@ -1141,10 +1174,11 @@ class TestClass(unittest.TestCase):
         cv_folds_outer_loop_float = 2.3
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop_float, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop_float, draw_conf_mat,
+            plt_name, True
         )
         self.assertEqual(
             str(message.exception), 'Expect "cv_folds_outer_loop" to be set to '
@@ -1156,10 +1190,11 @@ class TestClass(unittest.TestCase):
         cv_folds_outer_loop_str = ''
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop_str, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop_str, draw_conf_mat,
+            plt_name, True
         )
         self.assertEqual(
             str(message.exception), 'Expect "cv_folds_outer_loop" to be set to '
@@ -1171,10 +1206,11 @@ class TestClass(unittest.TestCase):
         cv_folds_outer_loop_int = 1
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop_int, draw_conf_mat, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop_int, draw_conf_mat,
+            plt_name, True
         )
         self.assertEqual(
             str(message.exception), 'Expect "cv_folds_outer_loop" to be set to '
@@ -1186,10 +1222,11 @@ class TestClass(unittest.TestCase):
         draw_conf_mat_float = 0.0
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat_float, plt_name, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat_float,
+            plt_name, True
         )
         self.assertEqual(
             str(message.exception), 'Expect "draw_conf_mat" to be a Boolean '
@@ -1200,10 +1237,11 @@ class TestClass(unittest.TestCase):
         plt_name_bool = False
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
-            selected_features, splits, resampling_method, n_components_pca, run,
-            fixed_params, tuned_params, train_scoring_metric,
-            test_scoring_funcs, n_iter, cv_folds_inner_loop,
-            cv_folds_outer_loop, draw_conf_mat, plt_name_bool, True
+            selected_features, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat,
+            plt_name_bool, True
         )
         self.assertEqual(
             str(message.exception), 'Expect "plt_name" to be a string'
@@ -1218,6 +1256,7 @@ class TestClass(unittest.TestCase):
         y_test_ext = np.array([5])
         selected_features_ext = ['A', 'C', 'B']
         splits_ext = [(np.array([6, 6, 6, 6, 6]), np.array([]))]
+        const_split_ext = False
         resampling_method_ext = 'smote'
         n_components_pca_ext = 4
         run_ext = 'train'
@@ -1234,10 +1273,11 @@ class TestClass(unittest.TestCase):
         output_str = check_arguments(
             'PlaceHolder', x_train_ext, y_train_ext, train_groups_ext,
             x_test_ext, y_test_ext, selected_features_ext, splits_ext,
-            resampling_method_ext, n_components_pca_ext, run_ext,
-            fixed_params_ext, tuned_params_ext, train_scoring_metric_ext,
-            test_scoring_funcs_ext, n_iter_ext, cv_folds_inner_loop_ext,
-            cv_folds_outer_loop_ext, draw_conf_mat_ext, plt_name_ext, True
+            const_split_ext, resampling_method_ext, n_components_pca_ext,
+            run_ext, fixed_params_ext, tuned_params_ext,
+            train_scoring_metric_ext, test_scoring_funcs_ext, n_iter_ext,
+            cv_folds_inner_loop_ext, cv_folds_outer_loop_ext, draw_conf_mat_ext,
+            plt_name_ext, True
         )
         self.assertEqual(output_str, 'All checks passed')
 
@@ -1519,12 +1559,13 @@ class TestClass(unittest.TestCase):
         # Default function arguments
         x = np.array([[1, 2], [3, 4]])
         y = np.array(['a', 'b'])
+        const_split = True
         percent_test = 0.2
 
         # Test x is a numpy array
         with self.assertRaises(TypeError) as message:
             test_ml_train.split_train_test_data_random(
-                [[1, 2], [3, 4]], y, percent_test, True
+                [[1, 2], [3, 4]], y, const_split, percent_test, True
             )
         self.assertEqual(
             str(message.exception), 'Expect "x" to be an array of x values'
@@ -1533,7 +1574,7 @@ class TestClass(unittest.TestCase):
         # Test y is a numpy array
         with self.assertRaises(TypeError) as message:
             test_ml_train.split_train_test_data_random(
-                x, ['a', 'b'], percent_test, True
+                x, ['a', 'b'], const_split, percent_test, True
             )
         self.assertEqual(
             str(message.exception), 'Expect "y" to be an array of y values'
@@ -1542,7 +1583,8 @@ class TestClass(unittest.TestCase):
         # Test that dimensions of x and y values match
         with self.assertRaises(ValueError) as message:
             test_ml_train.split_train_test_data_random(
-                np.array([[1, 2], [3, 4], [5, 6]]), y, percent_test, True
+                np.array([[1, 2], [3, 4], [5, 6]]), y, const_split,
+                percent_test, True
             )
         self.assertEqual(
             str(message.exception), 'Mismatch in the dimensions of the input '
@@ -1552,7 +1594,8 @@ class TestClass(unittest.TestCase):
         # Test x doesn't contain any NaN values
         with self.assertRaises(ValueError) as message:
             test_ml_train.split_train_test_data_random(
-                np.array([[1, np.nan], [3, 4]]), y, percent_test, True
+                np.array([[1, np.nan], [3, 4]]), y, const_split, percent_test,
+                True
             )
         self.assertEqual(
             str(message.exception), 'NaN value(s) detected in "x" data'
@@ -1561,16 +1604,27 @@ class TestClass(unittest.TestCase):
         # Test y doesn't contain any NaN values
         with self.assertRaises(ValueError) as message:
             test_ml_train.split_train_test_data_random(
-                x, np.array([np.nan, 'b'], dtype=object), percent_test, True
+                x, np.array([np.nan, 'b'], dtype=object), const_split,
+                percent_test, True
             )
         self.assertEqual(
             str(message.exception), 'NaN value(s) detected in "y" data'
         )
 
+        # Test const_split is a boolean
+        with self.assertRaises(TypeError) as message:
+            test_ml_train.split_train_test_data_random(
+                x, y, '', True, True
+            )
+        self.assertEqual(
+            str(message.exception), 'Expect "const_split" to be a Boolean (True'
+            ' or False)'
+        )
+
         # Test percent_test is a float/integer value
         with self.assertRaises(TypeError) as message:
             test_ml_train.split_train_test_data_random(
-                x, y, True, True
+                x, y, const_split, True, True
             )
         self.assertEqual(
             str(message.exception), '"percent_test" argument should be set to a'
@@ -1580,7 +1634,7 @@ class TestClass(unittest.TestCase):
         # Test percent_test is in the range 0 - 0.5
         with self.assertRaises(ValueError) as message:
             test_ml_train.split_train_test_data_random(
-                x, y, 0.52, True
+                x, y, const_split, 0.52, True
             )
         self.assertEqual(
             str(message.exception), '"percent_test" argument should be set to a'
@@ -1593,7 +1647,7 @@ class TestClass(unittest.TestCase):
         exp_split = [np.array([0, 2, 3, 4]), np.array([1])]
         act_split = test_ml_train.split_train_test_data_random(
             np.array([[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]),
-            np.array(['a', 'a', 'a', 'a', 'a']), 0.2, True
+            np.array(['a', 'a', 'a', 'a', 'a']), False, 0.2, True
         )
         np.testing.assert_equal(exp_split[0], act_split[0])
         np.testing.assert_equal(exp_split[1], act_split[1])
@@ -2025,7 +2079,11 @@ class TestClass(unittest.TestCase):
         # Test KBest feature selection
         exp_importance_df = pd.DataFrame({'Feature': ['Feature_1', 'Feature_2'],
                                           'Score': [0.91984923, 0.08015077]})
-        act_importance_df = test_ml_train.calc_feature_importances_kbest(
+        exp_feat_importances = OrderedDict({'Feature_1': [0.91984923 for n in range(10)],
+                                            'Feature_2': [0.08015077 for n in range(10)]})
+        (
+            act_importance_df, act_feat_importances
+        ) = test_ml_train.calc_feature_importances_kbest(
             np.array([[2, 2],
                       [1, 10],
                       [2, 3],
@@ -2042,6 +2100,12 @@ class TestClass(unittest.TestCase):
             ['Feature_1', 'Feature_2'], 'f_classif', 10, True, '', True
         )
         pd.testing.assert_frame_equal(exp_importance_df, act_importance_df)
+        self.assertEqual(list(exp_feat_importances.keys()),
+                         list(act_feat_importances.keys()))
+        for key in exp_feat_importances.keys():
+            np.testing.assert_almost_equal(
+                exp_feat_importances[key], act_feat_importances[key], 7
+            )
 
         # Removes directory created by defining RunML object
         shutil.rmtree('tests/Temp_output')
@@ -2189,8 +2253,12 @@ class TestClass(unittest.TestCase):
 
         # Test tree feature selection
         exp_importance_df = pd.DataFrame({'Feature': ['Feature_1', 'Feature_2'],
-                                          'Score': [0.554, 0.446]})
-        act_importance_df = test_ml_train.calc_feature_importances_tree(
+                                          'Score': [0.53276046, 0.46723954]})
+        exp_feat_importances = OrderedDict({'Feature_1': [0.53276046 for n in range(10)],
+                                            'Feature_2': [0.46723954 for n in range(10)]})
+        (
+            act_importance_df, act_feat_importances
+        ) = test_ml_train.calc_feature_importances_tree(
             np.array([[2, 2],
                       [1, 10],
                       [2, 3],
@@ -2204,9 +2272,15 @@ class TestClass(unittest.TestCase):
                       [2, 7],
                       [3, 8]]),
             np.array(['A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B', 'A', 'B']),
-            ['Feature_1', 'Feature_2'], 1000, False, '', True
+            ['Feature_1', 'Feature_2'], 10, False, '', True
         )
-        pd.testing.assert_frame_equal(exp_importance_df, act_importance_df, atol=0.01)
+        pd.testing.assert_frame_equal(exp_importance_df, act_importance_df)
+        self.assertEqual(list(exp_feat_importances.keys()),
+                         list(act_feat_importances.keys()))
+        for key in exp_feat_importances.keys():
+            np.testing.assert_almost_equal(
+                exp_feat_importances[key], act_feat_importances[key], 7
+            )
 
         # Removes directory created by defining RunML object
         shutil.rmtree('tests/Temp_output')
@@ -2232,12 +2306,14 @@ class TestClass(unittest.TestCase):
 
         # Defines function arguments
         from sklearn.ensemble import AdaBoostClassifier
+        from sklearn.metrics import make_scorer, f1_score
         x = None
         y = None
         features = None
         classifier = AdaBoostClassifier
         parameters = {'n_estimators': [10, 30, 100, 300, 1000]}
         model_metric = 'accuracy'
+        f1 = make_scorer(f1_score, average='weighted')
         num_repeats = 1000
         scale = True
         plt_name = ''
@@ -2358,7 +2434,7 @@ class TestClass(unittest.TestCase):
         with self.assertRaises(TypeError) as message:
             test_ml_train.calc_feature_importances_permutation(
                 x, y, fluor_data.columns.tolist(), classifier, OrderedDict(),
-                'precision', 1000., scale, plt_name, True
+                f1, 1000., scale, plt_name, True
             )
         self.assertEqual(
             str(message.exception), '"num_repeats" should be set to a positive '
@@ -2369,7 +2445,7 @@ class TestClass(unittest.TestCase):
         with self.assertRaises(ValueError) as message:
             test_ml_train.calc_feature_importances_permutation(
                 x, y, fluor_data.columns.tolist(), classifier, OrderedDict(),
-                model_metric, 0, scale, plt_name, True
+                'precision', 0, scale, plt_name, True
             )
         self.assertEqual(
             str(message.exception), '"num_repeats" should be set to a positive '
@@ -2380,7 +2456,7 @@ class TestClass(unittest.TestCase):
         with self.assertRaises(TypeError) as message:
             test_ml_train.calc_feature_importances_permutation(
                 x, y, fluor_data.columns.tolist(), classifier, OrderedDict(),
-                model_metric, num_repeats, 1, plt_name, True
+                f1, num_repeats, 1, plt_name, True
             )
         self.assertEqual(
             str(message.exception), '"scale" should be set to a Boolean value'
@@ -2405,7 +2481,11 @@ class TestClass(unittest.TestCase):
         })
         exp_importance_df = pd.DataFrame({'Feature': ['Feature_1', 'Feature_2'],
                                           'Score': [-0.05714286, -0.06666667]})
-        act_importance_df = test_ml_train.calc_feature_importances_permutation(
+        exp_feat_importances = OrderedDict({'Feature_1': [-0.05714286 for n in range(10)],
+                                            'Feature_2': [-0.06666667 for n in range(10)]})
+        (
+            act_importance_df, act_feat_importances
+        ) = test_ml_train.calc_feature_importances_permutation(
             np.array([[2, 2],
                       [1, 10],
                       [2, 3],
@@ -2423,6 +2503,12 @@ class TestClass(unittest.TestCase):
             '', True
         )
         pd.testing.assert_frame_equal(exp_importance_df, act_importance_df)
+        self.assertEqual(list(exp_feat_importances.keys()),
+                         list(act_feat_importances.keys()))
+        for key in exp_feat_importances.keys():
+            np.testing.assert_almost_equal(
+                exp_feat_importances[key], act_feat_importances[key], 7
+            )
 
         # Removes directory created by defining RunML object
         shutil.rmtree('tests/Temp_output')
@@ -2447,60 +2533,74 @@ class TestClass(unittest.TestCase):
         )
 
         # Defines function arguments
-        x = None
+        x_df = None
         scale = True
         plt_name = ''
 
-        # Test "x" is a numpy array
+        # Test "fluor_data" is a pandas dataframe
         with self.assertRaises(TypeError) as message:
-            test_ml_train.run_pca(fluor_data, scale, plt_name, True)
+            test_ml_train.run_pca(fluor_data.to_numpy(), scale, plt_name, True)
         self.assertEqual(
-            str(message.exception), 'Expect "x" to be a (2D) array of '
+            str(message.exception), 'Expect "fluor_data" to be dataframe of '
             'fluorescence readings'
         )
 
-        # Test "x" is a 2D array
+        # Test "fluor_data" only contains float and/or integer values
+        x_df_non_num = pd.DataFrame(
+            {'A': [1, 2], 'B': [np.nan, 4], 'C': [4, '5']}
+        )
         with self.assertRaises(ValueError) as message:
-            test_ml_train.run_pca(
-                fluor_data.to_numpy().flatten(), scale, plt_name, True
-            )
+            test_ml_train.run_pca(x_df_non_num, scale, plt_name, True)
         self.assertEqual(
-            str(message.exception), 'Expect "x" to be a (2D) array of '
-            'fluorescence readings'
+            str(message.exception), 'Non-numeric value(s) in "fluor_data" - '
+            'expect all values in "fluor_data" to be integers / floats'
         )
 
         # Test "scale" is a Boolean
         with self.assertRaises(TypeError) as message:
-            test_ml_train.run_pca(x, 1, plt_name, True)
+            test_ml_train.run_pca(x_df, 1, plt_name, True)
         self.assertEqual(
             str(message.exception), '"scale" should be set to a Boolean value'
         )
 
         # Test "plt_name" is a string
         with self.assertRaises(TypeError) as message:
-            test_ml_train.run_pca(x, False, [], True)
+            test_ml_train.run_pca(x_df, False, [], True)
         self.assertEqual(
             str(message.exception), '"plt_name" should be a string value'
         )
 
         # Test PCA calculation
-        act_model = test_ml_train.run_pca(fluor_data.to_numpy(), True, '', True)
+        from sklearn.preprocessing import RobustScaler
 
-        # These values are for fitting the PCA to the unscaled data (because
-        # transformation of the data is not carried out in run_pca)
+        act_model, act_pca_components = test_ml_train.run_pca(
+            fluor_data, True, '', True
+        )
+
         exp_transform_x = np.array(
-            [[-3.18109341, -0.22506071,  1.44221788],
-             [-3.49530274, -0.42244343, -1.36176368],
-             [ 2.37050586,  2.57343631, -0.09015284],
-             [ 4.30589029, -1.92593218,  0.00969865]]
+            [[-1.18870441, -0.758145263, -0.390925304],
+             [-1.16720749, -0.579369555,  0.422721778],
+             [ 3.03636219, -0.179547060,  0.00190310232],
+             [-0.680450290, 1.51706188, -0.0336995763]]
+        )
+        exp_pca_components = pd.DataFrame({
+            'Component': [1, 2, 3],
+            'Feature_1': [0.1613685, 0.63232001, -0.75771473],
+            'Feature_2': [-0.97491947, 0.22137831, -0.02288376],
+            'Feature_3': [-0.15327175, -0.74240357, -0.65218457]
+        })
+        exp_pca_components = exp_pca_components.set_index('Component', drop=True)
+        # Fitting, but not transformation, of the data is carried out in run_pca)
+        np.testing.assert_almost_equal(
+            exp_transform_x,
+            act_model.fit_transform(RobustScaler().fit_transform(fluor_data.to_numpy())),
+            7
         )
         np.testing.assert_almost_equal(
-            exp_transform_x, act_model.fit_transform(fluor_data.to_numpy()), 7
-        )
-        np.testing.assert_almost_equal(
-            np.array([0.76223747, 0.17312951, 0.06463302]),
+            np.array([0.77693266, 0.20232139, 0.02074595]),
             act_model.explained_variance_ratio_, 7
         )
+        pd.testing.assert_frame_equal(exp_pca_components, act_pca_components)
 
         # Removes directory created by defining RunML object
         shutil.rmtree('tests/Temp_output')
@@ -2906,7 +3006,7 @@ class TestClass(unittest.TestCase):
                 self.assertEqual(exp_val, act_val)
 
         # Test LinearSVC
-        exp_params = OrderedDict({'C': np.logspace(-5, 15, num=41, base=2)})
+        exp_params = OrderedDict({'C': np.logspace(-5, 15, num=21, base=2)})
         act_params = test_ml_train.define_tuned_model_params(
             LinearSVC(), x_train, n_folds
         )
@@ -2920,8 +3020,8 @@ class TestClass(unittest.TestCase):
 
         # Test SVC
         exp_params = OrderedDict({
-            'C': np.logspace(-5, 15, num=41, base=2),
-            'gamma': np.logspace(-15, 3, num=37, base=2),
+            'C': np.logspace(-5, 15, num=21, base=2),
+            'gamma': np.logspace(-15, 3, num=19, base=2),
             'kernel': ['rbf']
         })
         act_params = test_ml_train.define_tuned_model_params(
@@ -3652,7 +3752,7 @@ class TestClass(unittest.TestCase):
             y_train=test_ml_train.y, train_groups=test_ml_train.sub_classes,
             x_test=x_test, y_test=y_test,
             selected_features=['Feature_2', 'Feature_3'], splits=None,
-            resampling_method='smoteenn', n_components_pca=2,
+            const_split=False, resampling_method='smoteenn', n_components_pca=2,
             run='randomsearch',
             params={'n_estimators': np.array([10, 30, 100, 300, 1000])},
             train_scoring_metric=f1, test_scoring_funcs={}, n_iter=4,
@@ -3699,7 +3799,7 @@ class TestClass(unittest.TestCase):
             AdaBoostClassifier(random_state=1), x_train=test_ml_train.x,
             y_train=test_ml_train.y, train_groups=None, x_test=x_test,
             y_test=y_test, selected_features=['Feature_2', 'Feature_1'],
-            splits=None, resampling_method='no_balancing',
+            splits=None, const_split=False, resampling_method='no_balancing',
             n_components_pca=None, run='gridsearch',
             params={'n_estimators': np.array([10, 30, 100, 300, 1000])},
             train_scoring_metric=precision, test_scoring_funcs={},
@@ -3743,8 +3843,9 @@ class TestClass(unittest.TestCase):
             y_train=test_ml_train.y, train_groups=test_ml_train.sub_classes,
             x_test=x_test, y_test=y_test,
             selected_features=['Feature_2', 'Feature_3', 'Feature_1'],
-            splits=splits, resampling_method='max_sampling', n_components_pca=2,
-            run='train', params={'n_estimators': 100, 'random_state': 1},
+            splits=splits, const_split=False, resampling_method='max_sampling',
+            n_components_pca=2, run='train',
+            params={'n_estimators': 100, 'random_state': 1},
             train_scoring_metric='accuracy',
             test_scoring_funcs=test_scoring_funcs, n_iter=None, cv_folds=5,
             test=True
@@ -3857,7 +3958,7 @@ class TestClass(unittest.TestCase):
         act_nested_cv_search = test_ml_train.run_nested_CV(
             KNeighborsClassifier, test_ml_train.x, test_ml_train.y,
             test_ml_train.sub_classes, ['Feature_3', 'Feature_1'], None, None,
-            'no_balancing', None, 'randomsearch',
+            False, 'no_balancing', None, 'randomsearch',
             {'metric': 'minkowski', 'n_jobs': -1},
             {'n_neighbors': [1, 2, 3], 'weights': ['uniform', 'distance'],
              'p': np.array([1, 2])}, f1,
@@ -3952,9 +4053,10 @@ class TestClass(unittest.TestCase):
                       'A'])
         ]
 
+        # FAILS FOR SMOTETOMEK AND SMOTEENN SINCE BEST_PARAMS ARE NOT CONSISTENT - NOT SURE WHY THIS IS...
         act_nested_cv_search = test_ml_train.run_nested_CV(
             LinearSVC, test_ml_train.x, test_ml_train.y,
-            None, ['Feature_1', 'Feature_2', 'Feature_3'], None, None,
+            None, ['Feature_1', 'Feature_2', 'Feature_3'], None, None, False,
             'smote', 1, 'gridsearch', {'dual': False, 'random_state': 1},
             {'C': np.array([0.01, 0.1, 1, 10, 100, 1000, 10000])}, 'accuracy',
             {f1_score: {'average': 'macro'}, recall_score: {'average': 'micro'}},

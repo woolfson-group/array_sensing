@@ -264,7 +264,7 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
     ncols = c_dim*label_df.shape[1]
     fluor_df = pd.read_excel(
         plate_path, sheet_name='End point', skiprows=start_row+1, nrows=nrows,
-        index_col=0, usecols=range(ncols+1), dtype=np.float64
+        index_col=None, usecols=range(1, ncols+1), dtype=np.float64
     ).reset_index(drop=True)
 
     # Combines fluorescence data collected for the same analyte into a dataframe
@@ -1908,7 +1908,8 @@ class ParseArrayData(DefData):
         # separately during ML cross-validation loop => don't perform here!
 
     def display_data_distribution(
-        self, scale=True, cushion=0.2, class_order=None, prefix=''
+        self, ml_fluor_data=None, results_dir=None, scale=True, cushion=0.2,
+        class_order=None, prefix='', test=False
     ):
         """
         Generates plots to represent the range of values recorded across repeats
@@ -1917,6 +1918,10 @@ class ParseArrayData(DefData):
 
         Input
         ----------
+        - ml_fluor_data: DataFrame of fluorescence readings. If None, will be
+        set to self.ml_fluor_data.
+        - results_dir: Directory where output plots are to be saved. If None,
+        will be set to self.results_dir.
         - scale: Boolean, specifies whether to scale the input dataframe of
         fluorescence readings and compare it to the original (unscaled) data
         - cushion: Size of buffer to add to the y-axes, whose range is between
@@ -1927,17 +1932,24 @@ class ParseArrayData(DefData):
         automatically determine the analytes present (and plot them in the order
         obtained using the sorted() function)
         - prefix: Prefix to add to the file names of saved plots
+        - test: Boolean describing whether the function is being run during the
+        program's unit tests - by default is set to False
         """
+
+        if ml_fluor_data is None:
+            ml_fluor_data = self.ml_fluor_data
+        if results_dir is None:
+            results_dir = self.results_dir
 
         # Draws heatmap fingerprint
         draw_heatmap_fingerprints(
-            self.ml_fluor_data, self.results_dir, scale, class_order, prefix,
-            self.test
+            ml_fluor_data, results_dir, scale, class_order, prefix,
+            test
         )
         # Draws boxplots
         draw_boxplots(
-            self.ml_fluor_data, self.results_dir, scale, cushion, class_order,
-            prefix, self.test
+            ml_fluor_data, results_dir, scale, cushion, class_order,
+            prefix, test
         )
 
     def run_anova(self):
@@ -1989,6 +2001,6 @@ class ParseArrayData(DefData):
                 print('{}: Standard deviation {}'.format(
                     analyte, np.std(median_vals_dict[peptide][analyte], ddof=1)
                 ))
-            print('{}: {}'.format(peptide, stats_dict[peptide]['p value']))
+            print('{} p-value: {}'.format(peptide, stats_dict[peptide]['p value']))
 
         return stats_dict
