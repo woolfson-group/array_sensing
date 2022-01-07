@@ -2854,7 +2854,7 @@ class TestClass(unittest.TestCase):
         )
 
         # Test LogisticRegression
-        exp_params = OrderedDict({'n_jobs': -1})
+        exp_params = OrderedDict({'n_jobs': -1, 'max_iter': 1000})
         act_params = test_ml_train.define_fixed_model_params(LogisticRegression())
         self.assertEqual(exp_params, act_params)
 
