@@ -134,7 +134,7 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
             plate_path, sheet_name='Protocol Information', header=None,
             index_col=0, dtype=str, engine='openpyxl'
         )
-    except (ValueError, XLRDError):
+    except (ValueError, KeyError, XLRDError):
         raise ValueError(
             '"Protocol Information" sheet not found in {}'.format(plate_path)
         )
@@ -244,7 +244,7 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
             plate_path, sheet_name='End point', header=None, index_col=1,
             dtype=str, engine='openpyxl'
         )
-    except (ValueError, XLRDError):
+    except (ValueError, KeyError, XLRDError):
         raise ValueError(
             '"End point" sheet not found in {}'.format(plate_path)
         )
