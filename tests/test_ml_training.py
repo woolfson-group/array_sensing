@@ -1152,11 +1152,11 @@ class TestClass(unittest.TestCase):
         )
         self.assertEqual(
             str(message.exception), 'Expect "cv_folds_inner_loop" to be a '
-            'positive integer value in the range of 2 - 10'
+            'positive integer value in the range of 2 - 20'
         )
 
-        # Test cv_folds_inner_loop is an integer in the range of 2 - 10
-        cv_folds_inner_loop_int = 11
+        # Test cv_folds_inner_loop is an integer in the range of 2 - 20
+        cv_folds_inner_loop_int = 21
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
             selected_features, splits, const_split, resampling_method,
@@ -1167,7 +1167,7 @@ class TestClass(unittest.TestCase):
         )
         self.assertEqual(
             str(message.exception), 'Expect "cv_folds_inner_loop" to be a '
-            'positive integer value in the range of 2 - 10'
+            'positive integer value in the range of 2 - 20'
         )
 
         # Test cv_folds_outer_loop type is set to 'loocv' or an integer value
@@ -1183,7 +1183,7 @@ class TestClass(unittest.TestCase):
         self.assertEqual(
             str(message.exception), 'Expect "cv_folds_outer_loop" to be set to '
             'either "loocv" (leave-one-out cross-validation) or a positive '
-            'integer in the range of 2 - 10'
+            'integer in the range of 2 - 20'
         )
 
         # Test cv_folds_outer_loop type is set to 'loocv' or an integer value
@@ -1199,10 +1199,10 @@ class TestClass(unittest.TestCase):
         self.assertEqual(
             str(message.exception), 'Expect "cv_folds_outer_loop" to be set to '
             'either "loocv" (leave-one-out cross-validation) or a positive '
-            'integer in the range of 2 - 10'
+            'integer in the range of 2 - 20'
         )
 
-        # Test cv_folds_outer_loop is an integer in the range of 2 - 10
+        # Test cv_folds_outer_loop is an integer in the range of 2 - 20
         cv_folds_outer_loop_int = 1
         with self.assertRaises(ValueError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
@@ -1215,7 +1215,7 @@ class TestClass(unittest.TestCase):
         self.assertEqual(
             str(message.exception), 'Expect "cv_folds_outer_loop" to be set to '
             'either "loocv" (leave-one-out cross-validation) or a positive '
-            'integer in the range of 2 - 10'
+            'integer in the range of 2 - 20'
         )
 
         # Test draw_conf_mat type is a Boolean
@@ -2865,7 +2865,8 @@ class TestClass(unittest.TestCase):
         self.assertEqual(exp_params, act_params)
 
         # Test LinearSVC
-        exp_params = OrderedDict({'dual': False})
+        exp_params = OrderedDict({'dual': False,
+                                  'max_iter': 10000})
         act_params = test_ml_train.define_fixed_model_params(LinearSVC())
         self.assertEqual(exp_params, act_params)
 
@@ -3172,7 +3173,7 @@ class TestClass(unittest.TestCase):
 
         # Tests error
         with self.assertRaises(ValueError) as message:
-            test_ml_train.conv_resampling_method('')
+            test_ml_train.conv_resampling_method('', False)
         self.assertEqual(
             str(message.exception), 'Resampling method  not recognised'
         )
@@ -3245,7 +3246,7 @@ class TestClass(unittest.TestCase):
         act_random_search = test_ml_train.run_randomised_search(
             test_ml_train.x, test_ml_train.y, test_ml_train.sub_classes,
             ['Feature_1', 'Feature_3'], AdaBoostClassifier(random_state=1),
-            splits, 'smote', 1, parameters, 'accuracy', 4, True
+            splits, True, 'smote', 1, parameters, 'accuracy', 4, True
         )
         act_search_results = act_random_search.cv_results_
         for key in [
@@ -3318,8 +3319,8 @@ class TestClass(unittest.TestCase):
 
         act_random_search = test_ml_train.run_randomised_search(
             test_ml_train.x, test_ml_train.y, None, ['Feature_1', 'Feature_2'],
-            LinearSVC(dual=False, random_state=1), splits, 'max_sampling', None,
-            parameters, scoring_metric, None, True
+            LinearSVC(dual=False, random_state=1), splits, True,
+            'max_sampling', None, parameters, scoring_metric, None, True
         )
         act_search_results = act_random_search.cv_results_
         for key in [
@@ -3501,7 +3502,7 @@ class TestClass(unittest.TestCase):
         act_grid_search = test_ml_train.run_grid_search(
             test_ml_train.x, test_ml_train.y, test_ml_train.sub_classes,
             ['Feature_1', 'Feature_2', 'Feature_3'], SVC(random_state=1),
-            splits, 'smotetomek', 1, parameters, scoring_metric, True
+            splits, True, 'smotetomek', 1, parameters, scoring_metric, True
         )
         act_search_results = act_grid_search.cv_results_
         for key in [
@@ -3545,8 +3546,8 @@ class TestClass(unittest.TestCase):
 
         act_grid_search = test_ml_train.run_grid_search(
             test_ml_train.x, test_ml_train.y, test_ml_train.sub_classes,
-            ['Feature_1', 'Feature_2'], GaussianNB(), splits, 'no_balancing',
-            None, {}, 'accuracy', True
+            ['Feature_1', 'Feature_2'], GaussianNB(), splits, True,
+            'no_balancing', None, {}, 'accuracy', True
         )
         act_search_results = act_grid_search.cv_results_
         for key in [
@@ -3752,7 +3753,7 @@ class TestClass(unittest.TestCase):
             y_train=test_ml_train.y, train_groups=test_ml_train.sub_classes,
             x_test=x_test, y_test=y_test,
             selected_features=['Feature_2', 'Feature_3'], splits=None,
-            const_split=False, resampling_method='smoteenn', n_components_pca=2,
+            const_split=True, resampling_method='smoteenn', n_components_pca=2,
             run='randomsearch',
             params={'n_estimators': np.array([10, 30, 100, 300, 1000])},
             train_scoring_metric=f1, test_scoring_funcs={}, n_iter=4,
@@ -3799,7 +3800,7 @@ class TestClass(unittest.TestCase):
             AdaBoostClassifier(random_state=1), x_train=test_ml_train.x,
             y_train=test_ml_train.y, train_groups=None, x_test=x_test,
             y_test=y_test, selected_features=['Feature_2', 'Feature_1'],
-            splits=None, const_split=False, resampling_method='no_balancing',
+            splits=None, const_split=True, resampling_method='no_balancing',
             n_components_pca=None, run='gridsearch',
             params={'n_estimators': np.array([10, 30, 100, 300, 1000])},
             train_scoring_metric=precision, test_scoring_funcs={},
@@ -3843,7 +3844,7 @@ class TestClass(unittest.TestCase):
             y_train=test_ml_train.y, train_groups=test_ml_train.sub_classes,
             x_test=x_test, y_test=y_test,
             selected_features=['Feature_2', 'Feature_3', 'Feature_1'],
-            splits=splits, const_split=False, resampling_method='max_sampling',
+            splits=splits, const_split=True, resampling_method='max_sampling',
             n_components_pca=2, run='train',
             params={'n_estimators': 100, 'random_state': 1},
             train_scoring_metric='accuracy',
@@ -3958,7 +3959,7 @@ class TestClass(unittest.TestCase):
         act_nested_cv_search = test_ml_train.run_nested_CV(
             KNeighborsClassifier, test_ml_train.x, test_ml_train.y,
             test_ml_train.sub_classes, ['Feature_3', 'Feature_1'], None, None,
-            False, 'no_balancing', None, 'randomsearch',
+            True, 'no_balancing', None, 'randomsearch',
             {'metric': 'minkowski', 'n_jobs': -1},
             {'n_neighbors': [1, 2, 3], 'weights': ['uniform', 'distance'],
              'p': np.array([1, 2])}, f1,
@@ -4056,7 +4057,7 @@ class TestClass(unittest.TestCase):
         # FAILS FOR SMOTETOMEK AND SMOTEENN SINCE BEST_PARAMS ARE NOT CONSISTENT - NOT SURE WHY THIS IS...
         act_nested_cv_search = test_ml_train.run_nested_CV(
             LinearSVC, test_ml_train.x, test_ml_train.y,
-            None, ['Feature_1', 'Feature_2', 'Feature_3'], None, None, False,
+            None, ['Feature_1', 'Feature_2', 'Feature_3'], None, None, True,
             'smote', 1, 'gridsearch', {'dual': False, 'random_state': 1},
             {'C': np.array([0.01, 0.1, 1, 10, 100, 1000, 10000])}, 'accuracy',
             {f1_score: {'average': 'macro'}, recall_score: {'average': 'micro'}},
@@ -4159,12 +4160,69 @@ class TestClass(unittest.TestCase):
         from sklearn.ensemble import RandomForestClassifier
 
         # Test arguments
-        exp_F = 0.7999999999999998
-        exp_p = 0.6439069510127531
+        exp_F = 0.5472152668535277
+        exp_p = 0.8049362807184925
         act_F, act_p = test_ml_train.run_5x2_CV_combined_F_test(
             x.to_numpy()[0:40,:], np.array(y)[0:40], ['Feature_2', 'Feature_3'],
             ['Feature_2', 'Feature_3'], SVC, RandomForestClassifier,
             {'C': 10, 'gamma': 0.01, 'random_state': 1},
+            {'n_estimators': 250, 'min_samples_split': 5, 'min_samples_leaf': 2,
+             'random_state': 1}, 'max_sampling', 'no_balancing', 2, None, True
+        )
+        np.testing.assert_almost_equal(exp_F, act_F, 7)
+        np.testing.assert_almost_equal(exp_p, act_p, 7)
+
+        # Removes directory created by defining RunML object
+        shutil.rmtree('tests/Temp_output')
+
+    def test_run_group_5x2_CV_combined_F_test(self):
+        """
+        Tests run_group_5x2_CV_combined_F_test in train.py
+        """
+
+        print('Testing run_group_5x2_CV_combined_F_test')
+
+        results_dir = 'tests/Temp_output'
+        x = pd.DataFrame({
+            'Feature_1': [5, 9, 8, 1, 3, 5, 10, 6, 7, 1, 8, 9, 1, 10, 2, 2, 8,
+                          7, 1, 3, 8, 4, 3, 4, 4, 6, 2, 10, 4, 5, 1, 7, 10, 3,
+                          10, 6, 3, 8, 1, 4, 6, 1, 5, 2, 2, 1, 7, 1, 2, 4],
+            'Feature_2': [9, 9, 7, 9, 6, 4, 7, 4, 2, 9, 7, 9, 7, 6, 4, 10, 8, 1,
+                          5, 4, 3, 3, 4, 3, 1, 4, 9, 6, 7, 10, 4, 6, 9, 2, 7, 4,
+                          3, 5, 7, 10, 1, 5, 3, 7, 2, 5, 10, 2, 2, 5],
+            'Feature_3': [5, 4, 8, 10, 3, 2, 10, 5, 1, 10, 5, 5, 5, 10, 7, 1, 8,
+                          8, 2, 1, 10, 9, 10, 6, 7, 4, 3, 3, 10, 10, 4, 7, 4, 6,
+                          10, 7, 6, 9, 4, 9, 9, 4, 4, 5, 10, 2, 10, 1, 7, 10]
+        })
+        y = [
+            'A', 'B', 'B', 'A', 'B', 'B', 'A', 'A', 'B', 'A', 'A', 'B', 'B',
+            'A', 'A', 'A', 'B', 'B', 'A', 'B', 'A', 'B', 'A', 'A', 'A', 'A',
+            'A', 'A', 'B', 'A', 'A', 'A', 'B', 'A', 'B', 'A', 'B', 'B', 'A',
+            'A', 'B', 'B', 'B', 'A', 'A', 'A', 'B', 'B', 'B', 'B'
+        ]
+        groups = [
+            'A_1', 'B_2', 'B_1', 'A_2', 'B_1', 'B_2', 'A_2', 'A_1', 'B_1',
+            'A_1', 'A_2', 'B_1', 'B_2', 'A_1', 'A_1', 'A_2', 'B_2', 'B_1',
+            'A_1', 'B_2', 'A_2', 'B_2', 'A_2', 'A_2', 'A_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'A_1', 'A_2', 'A_1', 'B_2', 'A_1', 'B_1', 'A_2',
+            'B_2', 'B_2', 'A_1', 'A_1', 'B_1', 'B_1', 'B_2', 'A_1', 'A_1',
+            'A_2', 'B_2', 'B_2', 'B_1', 'B_1'
+        ]
+        shuffle = False
+
+        test_ml_train = RunML(results_dir, x, y, groups, shuffle, True)
+
+        # Define function arguments
+        from sklearn.svm import SVC
+        from sklearn.ensemble import RandomForestClassifier
+
+        # Test arguments
+        exp_F = 5.515307963669878
+        exp_p = 0.036662928091620105
+        act_F, act_p = test_ml_train.run_group_5x2_CV_combined_F_test(
+            x.to_numpy()[0:40,:], np.array(y)[0:40], np.array(groups)[0:40],
+            ['Feature_2', 'Feature_3'], ['Feature_2', 'Feature_3'], SVC,
+            RandomForestClassifier, {'C': 10, 'gamma': 0.01, 'random_state': 1},
             {'n_estimators': 250, 'min_samples_split': 5, 'min_samples_leaf': 2,
              'random_state': 1}, 'max_sampling', 'no_balancing', 2, None, True
         )

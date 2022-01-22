@@ -18,6 +18,7 @@ from matplotlib.colors import BASE_COLORS, CSS4_COLORS
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 from mlxtend.evaluate import combined_ftest_5x2cv
+from scipy.stats import f
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.decomposition import PCA
 from sklearn.ensemble import AdaBoostClassifier, ExtraTreesClassifier
@@ -26,7 +27,7 @@ from sklearn.feature_selection import (
 )
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import (
-    confusion_matrix, accuracy_score, cohen_kappa_score, f1_score,
+    confusion_matrix, accuracy_score, cohen_kappa_score, f1_score, make_scorer,
     precision_score, recall_score, roc_auc_score
 )
 from sklearn.model_selection import (
@@ -740,13 +741,13 @@ def check_arguments(
     if type(cv_folds_inner_loop) != int:
         raise TypeError(
             'Expect "cv_folds_inner_loop" to be a positive integer value in the'
-            ' range of 2 - 10'
+            ' range of 2 - 20'
         )
     else:
-        if cv_folds_inner_loop < 2 or cv_folds_inner_loop > 10:
+        if cv_folds_inner_loop < 2 or cv_folds_inner_loop > 20:
             raise ValueError(
                 'Expect "cv_folds_inner_loop" to be a positive integer value in'
-                ' the range of 2 - 10'
+                ' the range of 2 - 20'
             )
 
     if type(cv_folds_outer_loop) == str:
@@ -754,20 +755,20 @@ def check_arguments(
             raise ValueError(
                 'Expect "cv_folds_outer_loop" to be set to either "loocv" '
                 '(leave-one-out cross-validation) or a positive integer in the '
-                'range of 2 - 10'
+                'range of 2 - 20'
             )
     elif type(cv_folds_outer_loop) == int:
-        if cv_folds_outer_loop < 2 or cv_folds_outer_loop > 10:
+        if cv_folds_outer_loop < 2 or cv_folds_outer_loop > 20:
             raise ValueError(
                 'Expect "cv_folds_outer_loop" to be set to either "loocv" '
                 '(leave-one-out cross-validation) or a positive integer in the '
-                'range of 2 - 10'
+                'range of 2 - 20'
             )
     else:
         raise TypeError(
             'Expect "cv_folds_outer_loop" to be set to either "loocv" '
             '(leave-one-out cross-validation) or a positive integer in the '
-            'range of 2 - 10'
+            'range of 2 - 20'
         )
 
     if type(draw_conf_mat) != bool:
@@ -1168,10 +1169,16 @@ class RunML(DefData):
             correlation_matrix = correlation_matrix.abs()
 
         plt.clf()
-        heatmap = sns.heatmap(
-            data=correlation_matrix, cmap='RdBu_r', annot=True,
-            xticklabels=True, yticklabels=True, fmt='.3f'
-        )
+        if abs_vals is False:
+            heatmap = sns.heatmap(
+                data=correlation_matrix, cmap='RdBu_r', annot=True,
+                xticklabels=True, yticklabels=True, fmt='.3f'
+            )
+        else:
+            heatmap = sns.heatmap(
+                data=correlation_matrix, cmap='RdBu_r', annot=True,
+                xticklabels=True, yticklabels=True, fmt='.3f', vmin=0, vmax=1
+            )
         plt.xticks(rotation='vertical')
         plt.yticks(rotation='horizontal')
         plt.savefig('{}/{}Feature_correlations_Kendall_tau_rank.svg'.format(
@@ -1753,7 +1760,7 @@ class RunML(DefData):
         plt.clf()
         x_labels = np.linspace(1, max_num_components, max_num_components)
         lineplot = sns.lineplot(
-            x_labels, np.cumsum(model.explained_variance_ratio_), marker='o'
+            x=x_labels, y=np.cumsum(model.explained_variance_ratio_), marker='o'
         )
         plt.xticks(
             np.arange(1, x_labels.shape[0]+1), x_labels, rotation='vertical'
@@ -1873,8 +1880,8 @@ class RunML(DefData):
         colours = [key for key, val in BASE_COLORS.items()]
         extra_colours = [key for key, val in CSS4_COLORS.items()]
         colours += extra_colours[::-1]
-        markers = ['o', 'v', '^', '<', '>', '8', 's', 'p', '*', 'h', 'H', 'D',
-                   'd', 'P', 'X']
+        markers = ['o', 'v', '^', '<', '>', 's', 'p', '*', 'D', 'd', 'P', 'X',
+                   'h', 'H']*10
 
         categories = []
         if subclasses is None:
@@ -1987,7 +1994,8 @@ class RunML(DefData):
             params = OrderedDict({'metric': 'minkowski',
                                   'n_jobs': -1})
         elif type(classifier).__name__ == 'LinearSVC':
-            params = OrderedDict({'dual': False})  # Change back to True
+            params = OrderedDict({'dual': False,
+                                  'max_iter': 10000})  # Change back to True
             # (= default) if n_samples < n_features
         elif type(classifier).__name__ == 'SVC':
             params = OrderedDict()
@@ -2155,13 +2163,16 @@ class RunML(DefData):
                         else:
                             return warning
 
-    def conv_resampling_method(self, resampling_method, test=False):
+    def conv_resampling_method(self, resampling_method, const_split, test=False):
         """
         Converts resampling method name (a string) into an object
 
         Input
         ----------
-        resampling_method: Name of resampling method (string)
+        - resampling_method: Name of resampling method (string)
+        - const_split: Boolean, if set to True and splits is set to None,
+        function will generate splits using a fixed random_state (=>
+        reproducible results when the function is re-run)
         - test: Boolean describing whether the function is being run during the
         program's unit tests - by default is set to False
 
@@ -2170,23 +2181,7 @@ class RunML(DefData):
         resampling_obj: Resampling method (object)
         """
 
-        if test is False:
-            if resampling_method == 'no_balancing':
-                resampling_obj = None
-            elif resampling_method == 'max_sampling':
-                resampling_obj = RandomOverSampler(sampling_strategy='not majority')
-            elif resampling_method == 'smote':
-                resampling_obj = SMOTE(sampling_strategy='not majority')
-            elif resampling_method == 'smoteenn':
-                resampling_obj = SMOTEENN(sampling_strategy='not majority')
-            elif resampling_method == 'smotetomek':
-                resampling_obj = SMOTETomek(sampling_strategy='not majority')
-            else:
-                raise ValueError(
-                    'Resampling method {} not recognised'.format(resampling_method)
-                )
-
-        else:
+        if test is True or const_split is True:
             if resampling_method == 'no_balancing':
                 resampling_obj = None
             elif resampling_method == 'max_sampling':
@@ -2210,12 +2205,28 @@ class RunML(DefData):
                     'Resampling method {} not recognised'.format(resampling_method)
                 )
 
+        else:
+            if resampling_method == 'no_balancing':
+                resampling_obj = None
+            elif resampling_method == 'max_sampling':
+                resampling_obj = RandomOverSampler(sampling_strategy='not majority')
+            elif resampling_method == 'smote':
+                resampling_obj = SMOTE(sampling_strategy='not majority')
+            elif resampling_method == 'smoteenn':
+                resampling_obj = SMOTEENN(sampling_strategy='not majority')
+            elif resampling_method == 'smotetomek':
+                resampling_obj = SMOTETomek(sampling_strategy='not majority')
+            else:
+                raise ValueError(
+                    'Resampling method {} not recognised'.format(resampling_method)
+                )
+
         return resampling_obj
 
     def run_randomised_search(
         self, x_train, y_train, train_groups, selected_features, clf, splits,
-        resampling_method, n_components_pca, params, scoring_metric,
-        n_iter=None, test=False
+        const_split, resampling_method, n_components_pca, params,
+        scoring_metric, n_iter=None, test=False
     ):
         """
         Randomly picks combinations of hyperparameters from an input grid and
@@ -2243,6 +2254,9 @@ class RunML(DefData):
         e.g. sklearn.svm.LinearSVC('dual'=False)
         - splits: List of train: test splits of the input data (x_train and
         y_train) for cross-validation
+        - const_split: Boolean, if set to True and splits is set to None,
+        function will generate splits using a fixed random_state (=>
+        reproducible results when the function is re-run)
         - resampling_method: Name of the method (string) used to resample the
         data in an imbalanced dataset. Recognised method names are:
         'no_balancing'; 'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
@@ -2279,7 +2293,7 @@ class RunML(DefData):
             func_name='run_randomised_search', x_train=x_train, y_train=y_train,
             train_groups=train_groups, x_test=np.array([]), y_test=np.array([]),
             selected_features=selected_features, splits=splits,
-            const_split=True, resampling_method=resampling_method,
+            const_split=const_split, resampling_method=resampling_method,
             n_components_pca=n_components_pca, run='randomsearch',
             fixed_params={}, tuned_params=params,
             train_scoring_metric=scoring_metric,
@@ -2306,7 +2320,8 @@ class RunML(DefData):
 
         # Generates resampling object
         resampling_obj = self.conv_resampling_method(
-            resampling_method=resampling_method, test=test
+            resampling_method=resampling_method, const_split=const_split,
+            test=test
         )
         # Generates feature selection object
         feature_selection = ManualFeatureSelection(
@@ -2353,7 +2368,8 @@ class RunML(DefData):
 
     def run_grid_search(
         self, x_train, y_train, train_groups, selected_features, clf, splits,
-        resampling_method, n_components_pca, params, scoring_metric, test=False
+        const_split, resampling_method, n_components_pca, params,
+        scoring_metric, test=False
     ):
         """
         Tests all possible combinations of hyperparameters from an input grid
@@ -2377,8 +2393,11 @@ class RunML(DefData):
         - train_groups: Numpy array of group names of training data
         - clf: Selected classifier from the sklearn package,
         e.g. sklearn.svm.LinearSVC('dual'=False)
-        -- splits: List of train: test splits of the input data (x_train and
+        - splits: List of train: test splits of the input data (x_train and
         y_train) for cross-validation
+        - const_split: Boolean, if set to True and splits is set to None,
+        function will generate splits using a fixed random_state (=>
+        reproducible results when the function is re-run)
         - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
@@ -2411,7 +2430,7 @@ class RunML(DefData):
             func_name='run_grid_search', x_train=x_train, y_train=y_train,
             train_groups=train_groups, x_test=np.array([]), y_test=np.array([]),
             selected_features=selected_features,
-            splits=splits, const_split=True,
+            splits=splits, const_split=const_split,
             resampling_method=resampling_method,
             n_components_pca=n_components_pca, run='gridsearch',
             fixed_params={}, tuned_params=params,
@@ -2423,7 +2442,8 @@ class RunML(DefData):
 
         # Generates resampling object
         resampling_obj = self.conv_resampling_method(
-            resampling_method=resampling_method, test=test
+            resampling_method=resampling_method, const_split=const_split,
+            test=test
         )
         # Generates feature selection object
         feature_selection = ManualFeatureSelection(
@@ -2461,8 +2481,8 @@ class RunML(DefData):
         return grid_search
 
     def train_model(
-        self, x_train, y_train, selected_features, clf, resampling_method,
-        n_components_pca, test=False
+        self, x_train, y_train, selected_features, clf, const_split,
+        resampling_method, n_components_pca, test=False
     ):
         """
         Trains user-specified model on the training data (without cross-
@@ -2480,6 +2500,9 @@ class RunML(DefData):
         - selected_features: List of features to include
         - clf: Selected classifier from the sklearn package,
         e.g. sklearn.svm.LinearSVC('dual'=False)
+        - const_split: Boolean, if set to True and splits is set to None,
+        function will generate splits using a fixed random_state (=>
+        reproducible results when the function is re-run)
         - resampling_method: Name of the method used to resample the data in an
         imbalanced dataset. Recognised method names are: 'no_balancing';
         'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
@@ -2504,7 +2527,7 @@ class RunML(DefData):
             func_name='train_model', x_train=x_train, y_train=y_train,
             train_groups=None, x_test=np.array([]), y_test=np.array([]),
             selected_features=selected_features,
-            splits=[(y_train, np.array([]))], const_split=True,
+            splits=[(y_train, np.array([]))], const_split=const_split,
             resampling_method=resampling_method,
             n_components_pca=n_components_pca, run='train', fixed_params={},
             tuned_params={}, train_scoring_metric='accuracy',
@@ -2515,7 +2538,8 @@ class RunML(DefData):
 
         # Generates resampling object
         resampling_obj = self.conv_resampling_method(
-            resampling_method=resampling_method, test=test
+            resampling_method=resampling_method, const_split=const_split,
+            test=test
         )
         # Generates feature selection object
         feature_selection = ManualFeatureSelection(
@@ -2755,7 +2779,7 @@ class RunML(DefData):
         if run == 'randomsearch':
             search = self.run_randomised_search(
                 x_train, y_train, train_groups, selected_features, clf, splits,
-                resampling_method, n_components_pca, params,
+                const_split, resampling_method, n_components_pca, params,
                 train_scoring_metric, n_iter, test
             )
             return search
@@ -2763,7 +2787,7 @@ class RunML(DefData):
         elif run == 'gridsearch':
             search = self.run_grid_search(
                 x_train, y_train, train_groups, selected_features, clf, splits,
-                resampling_method, n_components_pca, params,
+                const_split, resampling_method, n_components_pca, params,
                 train_scoring_metric, test
             )
             return search
@@ -2771,7 +2795,7 @@ class RunML(DefData):
         elif run == 'train':
             train_clf = clf(**params)
             train_clf = self.train_model(
-                x_train, y_train, selected_features, train_clf,
+                x_train, y_train, selected_features, train_clf, const_split,
                 resampling_method, n_components_pca, test
             )
             predictions, test_scores = self.test_model(
@@ -2886,6 +2910,36 @@ class RunML(DefData):
             draw_conf_mat=draw_conf_mat, plt_name=plt_name, test=test
         )
 
+        if not inner_splits is None:
+            if not type(inner_splits) in [dict, OrderedDict]:
+                raise TypeError(
+                    'Expect "inner_splits" to be set either to None, or to a '
+                    'dictionary of train:test splits for the inner '
+                    'cross-validation loop'
+                )
+            else:
+                if outer_splits is None:
+                    if type(cv_folds_outer_loop) != int:
+                        raise ValueError(
+                           'Mismatch in the number of train:test splits in the'
+                           ' outer CV loop and the number of entries in the '
+                           '"inner_splits" dictionary'
+                        )
+                    else:
+                        if cv_folds_outer_loop != len(inner_splits):
+                            raise ValueError(
+                                'Mismatch in the number of train:test splits in'
+                                ' the outer CV loop and the number of entries '
+                                'in the "inner_splits" dictionary'
+                            )
+                else:
+                    if len(outer_splits) != len(inner_splits):
+                        raise ValueError(
+                            'Mismatch in the number of train:test splits in the'
+                            ' outer CV loop and the number of entries in the '
+                            '"inner_splits" dictionary'
+                        )
+
         nested_cv_search = OrderedDict({
             'inner_loop_searches': [],
             'outer_loop_models': [],
@@ -2893,7 +2947,8 @@ class RunML(DefData):
             'test_scores': OrderedDict(),
             'predictions': [],
             'x_true': [],
-            'y_true': []
+            'y_true': [],
+            'groups_true': []
         })
         for scoring_func in test_scoring_funcs.keys():
             nested_cv_search['test_scores'][
@@ -2938,7 +2993,7 @@ class RunML(DefData):
                     gkf = GroupKFold(n_splits=cv_folds_outer_loop)
                     outer_splits = list(gkf.split(X=x, y=y, groups=groups))
 
-        for split in outer_splits:
+        for i, split in enumerate(outer_splits):
             train_split = split[0]
             test_split = split[1]
             x_train = copy.deepcopy(x)[train_split]
@@ -2947,14 +3002,21 @@ class RunML(DefData):
             y_test = copy.deepcopy(y)[test_split]
             if not groups is None:
                 train_groups = copy.deepcopy(groups)[train_split]
+                test_groups = copy.deepcopy(groups)[test_split]
             else:
                 train_groups = None
+                test_groups = None
+
+            if not inner_splits is None:
+                sub_inner_split = inner_splits[i]
+            else:
+                sub_inner_split = None
 
             # Random / grid search of hyperparameters on training set
             train_clf = clf(**fixed_params)
             search = self.run_ml(
                 train_clf, x_train, y_train, train_groups, np.array([]),
-                np.array([]), selected_features, inner_splits, const_split,
+                np.array([]), selected_features, sub_inner_split, const_split,
                 resampling_method, n_components_pca, run, tuned_params,
                 train_scoring_metric, {}, n_iter, cv_folds_inner_loop,
                 draw_conf_mat, '', test
@@ -2983,6 +3045,7 @@ class RunML(DefData):
             nested_cv_search['predictions'].append(fold_predictions)
             nested_cv_search['x_true'].append(x_test)
             nested_cv_search['y_true'].append(y_test)
+            nested_cv_search['groups_true'].append(test_groups)
 
         # Checks nested_cv_search dictionary has been updated with the expected
         # values
@@ -3029,16 +3092,18 @@ class RunML(DefData):
     def run_5x2_CV_combined_F_test(
         self, x, y, selected_features_1, selected_features_2,
         classifier_1, classifier_2, params_1, params_2, resampling_method_1,
-        resampling_method_2, n_components_pca_1, n_components_pca_2, test=False
+        resampling_method_2, n_components_pca_1, n_components_pca_2,
+        test=False
     ):
         """
         Runs 5x2 CV combined F test to calculate whether there is a significant
-        difference in performance between two classifier models. These models
-        can differ in: 1) the classifier algorithm selected; 2) the values of
-        the classifier parameter values; 3) the features selected in the input
-        data; 4) the number of PCA components used to transform of the input
-        data; or 5) the method used to resample imbalanced classes in the input
-        dataset.
+        difference in performance between two classifier models. In this case,
+        train/test splits are made using GroupKFold (from the sklearn package).
+        These models can differ in: 1) the classifier algorithm selected; 2) the
+        values of the classifier parameter values; 3) the features selected in
+        the input data; 4) the number of PCA components used to transform the
+        input data; or 5) the method used to resample imbalanced classes in the
+        input dataset.
 
         Input
         ----------
@@ -3081,6 +3146,8 @@ class RunML(DefData):
         - p: p value output from combined F-test
         """
 
+        f1 = make_scorer(f1_score, average='weighted')
+
         # Checks argument values are suitable to run the function. Arguments of
         # "check_arguments" that are not specified for
         # "run_5x2_CV_combined_F_test" are set to values that will pass the checks
@@ -3088,11 +3155,11 @@ class RunML(DefData):
             func_name='run_5x2_CV_combined_F_test', x_train=x, y_train=y,
             train_groups=None, x_test=np.array([]), y_test=np.array([]),
             selected_features=selected_features_1,
-            splits=[(y, np.array([]))], const_split=True,
+            splits=[(y, np.array([]))], const_split=False,
             resampling_method=resampling_method_1,
             n_components_pca=n_components_pca_1, run='randomsearch',
             fixed_params=params_1, tuned_params={},
-            train_scoring_metric='accuracy', test_scoring_funcs={}, n_iter=None,
+            train_scoring_metric=f1, test_scoring_funcs={}, n_iter=None,
             cv_folds_inner_loop=5, cv_folds_outer_loop='loocv',
             draw_conf_mat=True, plt_name='', test=test
         )
@@ -3100,34 +3167,182 @@ class RunML(DefData):
             func_name='run_5x2_CV_combined_F_test', x_train=x, y_train=y,
             train_groups=None, x_test=np.array([]), y_test=np.array([]),
             selected_features=selected_features_2,
-            splits=[(y, np.array([]))], const_split=True,
+            splits=[(y, np.array([]))], const_split=False,
             resampling_method=resampling_method_2,
             n_components_pca=n_components_pca_2, run='randomsearch',
             fixed_params=params_2, tuned_params={},
-            train_scoring_metric='accuracy', test_scoring_funcs={}, n_iter=None,
+            train_scoring_metric=f1, test_scoring_funcs={}, n_iter=None,
             cv_folds_inner_loop=5, cv_folds_outer_loop='loocv',
             draw_conf_mat=True, plt_name='', test=test
         )
 
         clf_1 = classifier_1(**params_1)
         trained_clf_1 = self.train_model(
-            x, y, selected_features_1, clf_1, resampling_method_1,
+            x, y, selected_features_1, clf_1, False, resampling_method_1,
             n_components_pca_1, test
         )
         clf_2 = classifier_2(**params_2)
         trained_clf_2 = self.train_model(
-            x, y, selected_features_2, clf_2, resampling_method_2,
+            x, y, selected_features_2, clf_2, False, resampling_method_2,
             n_components_pca_2, test
         )
 
         if test is False:
             F, p = combined_ftest_5x2cv(
-                estimator1=trained_clf_1, estimator2=trained_clf_2, X=x, y=y
+                estimator1=trained_clf_1, estimator2=trained_clf_2, X=x, y=y,
+                scoring=f1
             )
         else:
             F, p = combined_ftest_5x2cv(
                 estimator1=trained_clf_1, estimator2=trained_clf_2, X=x, y=y,
-                random_seed=1
+                scoring=f1, random_seed=1
             )
+
+        return F, p
+
+    def run_group_5x2_CV_combined_F_test(
+        self, x, y, groups, selected_features_1, selected_features_2,
+        classifier_1, classifier_2, params_1, params_2, resampling_method_1,
+        resampling_method_2, n_components_pca_1, n_components_pca_2, test=False
+    ):
+        """
+        Runs 5x2 CV combined F test to calculate whether there is a significant
+        difference in performance between two classifier models. In this case,
+        train/test splits are made using GroupKFold (from the sklearn package).
+        These models can differ in: 1) the classifier algorithm selected; 2) the
+        values of the classifier parameter values; 3) the features selected in
+        the input data; 4) the number of PCA components used to transform the
+        input data; or 5) the method used to resample imbalanced classes in the
+        input dataset.
+
+        Input
+        ----------
+        - x: Numpy array of all x data (no need to have already split into
+        training and test data)
+        - y: Numpy array of all y data (no need to have already split into
+        training and test data)
+        - groups: Numpy array of all group names (no need to have already split
+        into training and test data)
+        - selected_features_1: List of features to include when training
+        classifier_1
+        - selected_features_2: List of features to include when training
+        classifier_2
+        - classifier_1: Selected classifier from the sklearn package,
+        e.g. sklearn.svm.LinearSVC, whose performance on the input data is to be
+        compared to classifier_2
+        - classifier_2: Selected classifier from the sklearn package,
+        e.g. sklearn.ensemble.AdaBoost, whose performance on the input data is
+        to be compared to classifier_1
+        - params_1: Dictionary of fixed-value hyperparameters and their
+        selected values, e.g. {n_jobs: -1}, to be used for classifier 1
+        - params_2: Dictionary of fixed-value hyperparameters and their
+        selected values, e.g. {n_jobs: -1}, to be used for classifier 2
+        - resampling_method_1: Name of the method used to resample the data in
+        the classifier 1 pipeline. Recognised method names are: 'no_balancing';
+        'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
+        - resampling_method_2: Name of the method used to resample the data in
+        the classifier 2 pipeline. Recognised method names are: 'no_balancing';
+        'max_sampling'; 'smote'; 'smoteenn'; and 'smotetomek'.
+        - n_components_pca_1: The number of components to transform the data to
+        after fitting the data with PCA for classifier 1. If set to None, PCA
+        will not be included in the pipeline.
+        - n_components_pca_2: The number of components to transform the data to
+        after fitting the data with PCA for classifier 2. If set to None, PCA
+        will not be included in the pipeline.
+        - test: Boolean describing whether the function is being run during the
+        program's unit tests - by default is set to False
+
+        Output
+        ----------
+        - F: F statistic output from combined F-test
+        - p: p value output from combined F-test
+        """
+
+        check_arguments(
+            func_name='run_5x2_CV_combined_F_test', x_train=x, y_train=y,
+            train_groups=groups, x_test=np.array([]), y_test=np.array([]),
+            selected_features=selected_features_1,
+            splits=[(y, np.array([]))], const_split=False,
+            resampling_method=resampling_method_1,
+            n_components_pca=n_components_pca_1, run='randomsearch',
+            fixed_params=params_1, tuned_params={},
+            train_scoring_metric='accuracy', test_scoring_funcs={},
+            n_iter=None, cv_folds_inner_loop=5, cv_folds_outer_loop='loocv',
+            draw_conf_mat=True, plt_name='', test=test
+        )
+        check_arguments(
+            func_name='run_5x2_CV_combined_F_test', x_train=x, y_train=y,
+            train_groups=groups, x_test=np.array([]), y_test=np.array([]),
+            selected_features=selected_features_2,
+            splits=[(y, np.array([]))], const_split=False,
+            resampling_method=resampling_method_2,
+            n_components_pca=n_components_pca_2, run='randomsearch',
+            fixed_params=params_2, tuned_params={},
+            train_scoring_metric='accuracy', test_scoring_funcs={},
+            n_iter=None, cv_folds_inner_loop=5, cv_folds_outer_loop='loocv',
+            draw_conf_mat=True, plt_name='', test=test
+        )
+
+        clf_1 = classifier_1(**params_1)
+        trained_clf_1 = self.train_model(
+            x, y, selected_features_1, clf_1, False, resampling_method_1,
+            n_components_pca_1, test
+        )
+        clf_2 = classifier_2(**params_2)
+        trained_clf_2 = self.train_model(
+            x, y, selected_features_2, clf_2, False, resampling_method_2,
+            n_components_pca_2, test
+        )
+
+        variances = []
+        differences = []
+        for i in range(5):
+            all_x = copy.deepcopy(x)
+            all_y = copy.deepcopy(y)
+            all_y.shape = (all_y.shape[0], 1)
+            all_groups = copy.deepcopy(groups)
+            all_groups.shape = (all_groups.shape[0], 1)
+
+            merged_data = np.concatenate([all_x, all_y, all_groups], axis=1)
+            if test is False:
+                np.random.shuffle(merged_data)
+            all_x = merged_data[:,:-2]
+            all_y = merged_data[:,-2]
+            all_groups = merged_data[:,-1]
+
+            splits = list(GroupKFold(n_splits=2).split(
+                X=all_x, y=all_y, groups=all_groups
+            ))
+
+            sub_diffs = []
+            for split in splits:
+                x_train = all_x[split[0]]
+                x_test = all_x[split[1]]
+                y_train = all_y[split[0]]
+                y_test = all_y[split[1]]
+
+                trained_clf_1.fit(x_train, y_train)
+                trained_clf_2.fit(x_train, y_train)
+                predictions_1 = trained_clf_1.predict(x_test)
+                predictions_2 = trained_clf_2.predict(x_test)
+
+                score_1 = f1_score(
+                    y_true=y_test, y_pred=predictions_1, average='weighted'
+                )
+                score_2 = f1_score(
+                    y_true=y_test, y_pred=predictions_2, average='weighted'
+                )
+                diff = score_1 - score_2
+                sub_diffs.append(diff)
+
+            differences += [sub_diffs[0]**2, sub_diffs[1]**2]
+            score_mean = np.mean(sub_diffs)
+            score_var = ((sub_diffs[0] - score_mean)**2 + (sub_diffs[1] - score_mean)**2)
+            variances.append(score_var)
+
+        numerator = np.sum(differences)
+        denominator = 2*(np.sum(variances))
+        F = float(numerator / denominator)
+        p = float(f.sf(F, 10, 5))
 
         return F, p

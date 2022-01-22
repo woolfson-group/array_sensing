@@ -132,7 +132,7 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
     try:
         protocol_df = pd.read_excel(
             plate_path, sheet_name='Protocol Information', header=None,
-            index_col=0, dtype=str
+            index_col=0, dtype=str, engine='openpyxl'
         )
     except (ValueError, XLRDError):
         raise ValueError(
@@ -149,7 +149,7 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
         )
     label_df = pd.read_excel(
         plate_path, sheet_name='Protocol Information', header=None,
-        skiprows=start_row+2, index_col=0, dtype=str
+        skiprows=start_row+2, index_col=0, dtype=str, engine='openpyxl'
     ).reset_index(drop=True)
     label_df = trim_dataframe(label_df, plate_path)
     label_df = label_df.replace(
@@ -178,7 +178,7 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
         )
     peptide_arrang = pd.read_excel(
         plate_path, sheet_name='Protocol Information', header=None,
-        skiprows=start_row+1, index_col=None, dtype=str
+        skiprows=start_row+1, index_col=None, dtype=str, engine='openpyxl'
     ).reset_index(drop=True)
     peptide_arrang = trim_dataframe(peptide_arrang, plate_path)
     r_dim = peptide_arrang.shape[0]
@@ -242,7 +242,7 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
     try:
         plate_df = pd.read_excel(
             plate_path, sheet_name='End point', header=None, index_col=1,
-            dtype=str
+            dtype=str, engine='openpyxl'
         )
     except (ValueError, XLRDError):
         raise ValueError(
@@ -264,7 +264,8 @@ def parse_xlsx_to_dataframe(plate_path, split, peptide_dict, gain=1):
     ncols = c_dim*label_df.shape[1]
     fluor_df = pd.read_excel(
         plate_path, sheet_name='End point', skiprows=start_row+1, nrows=nrows,
-        index_col=None, usecols=range(1, ncols+1), dtype=np.float64
+        index_col=None, usecols=range(1, ncols+1), dtype=np.float64,
+        engine='openpyxl'
     ).reset_index(drop=True)
 
     # Combines fluorescence data collected for the same analyte into a dataframe
@@ -1128,6 +1129,7 @@ def draw_boxplots(
             data=melt_df, x='Barrel', y='Reading', hue='Analyte',
             hue_order=classes
         )
+        plt.legend(bbox_to_anchor=(1.05, 1))
         plt.savefig('{}/Boxplots/{}{}_barrel_readings_boxplot.svg'.format(
             results_dir, prefix, label
         ))
