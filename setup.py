@@ -20,7 +20,8 @@ setup(
     license='MIT',
     keywords=['badass', 'array sensing', 'machine learning'],
     install_requires=['imblearn', 'jinja2', 'numpy', 'matplotlib', 'mlxtend',
-                      'pandas', 'scikit-learn', 'scipy', 'seaborn', 'xlrd'],
+                      'openpyxl', 'pandas', 'scikit-learn', 'scipy', 'seaborn',
+                      'xlrd'],
     classifiers=['Programming Language :: Python'],
     python_requires=('!=2.*, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, '
                      '!=3.5.*, <4')
