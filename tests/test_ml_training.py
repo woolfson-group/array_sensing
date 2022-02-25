@@ -384,7 +384,11 @@ class TestClass(unittest.TestCase):
                     'Feature': ['Feature_1', 'Feature_3', 'Feature_5', 'Feature_7',
                                 'Feature_2', 'Feature_9', 'Feature_8', 'Feature_6',
                                 'Feature_10', 'Feature_4'],
-                    'Score': [7.8, 7.1, 6.6, 6.5, 5.2, 5.0, 4.3, 4.1, 4.0, 3.4]
+                    'Score': [7.8, 7.1, 6.6, 6.5, 5.2, 5.0, 4.3, 4.1, 4.0, 3.4],
+                    'Lower conf limit': [0.13, 0.25, 3.7, 2.21, 0.15, 0.81,
+                                         1.33, 2.42, 0.64, 1.65],
+                    'Upper conf limit': [8.64, 9.21, 8.95, 8.34, 8.11, 7.94,
+                                         7.85, 8.44, 7.62, 9.02]
                 })
                 exp_cols = [
                     'Feature_1', 'Feature_2', 'Feature_3', 'Feature_4', 'Feature_5',
@@ -797,7 +801,7 @@ class TestClass(unittest.TestCase):
             str(message.exception), 'NaN value(s) detected in "y_test" data'
         )
 
-        # Test selected_features is a list
+        # Test selected_features is a list or a positive integer
         selected_features_str = 'X'
         with self.assertRaises(TypeError) as message: check_arguments(
             'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
@@ -808,8 +812,24 @@ class TestClass(unittest.TestCase):
             True
         )
         self.assertEqual(
-            str(message.exception), 'Expect "selected_features" to be a list of'
-            ' features to retain in the analysis'
+            str(message.exception), 'Expect "selected_features" to be either a '
+            'list of features to retain in the analysis, or an integer number '
+            'of features (to be selected via permutation analysis)'
+        )
+
+        # Test selected_features is a list or a positive integer
+        selected_features_str = 0
+        with self.assertRaises(ValueError) as message: check_arguments(
+            'PlaceHolder', x_train, y_train, train_groups, x_test, y_test,
+            selected_features_str, splits, const_split, resampling_method,
+            n_components_pca, run, fixed_params, tuned_params,
+            train_scoring_metric, test_scoring_funcs, n_iter,
+            cv_folds_inner_loop, cv_folds_outer_loop, draw_conf_mat, plt_name,
+            True
+        )
+        self.assertEqual(
+            str(message.exception), 'The number of selected_features must be a '
+            'positive integer'
         )
 
         # Test length of selected_features list is less than or equal to the
@@ -830,7 +850,7 @@ class TestClass(unittest.TestCase):
         )
         self.assertEqual(
             str(message.exception), 'There is a greater number of features '
-            'listed in "selected_features" than there are columns in the '
+            'in "selected_features" than there are columns in the '
             '"x_train" input arrays'
         )
 
@@ -852,8 +872,8 @@ class TestClass(unittest.TestCase):
         )
         self.assertEqual(
             str(message.exception), 'There is a greater number of features '
-            'listed in "selected_features" than there are columns in the '
-            '"x_test" input arrays'
+            'in "selected_features" than there are columns in the "x_test" '
+            'input arrays'
         )
 
         # Tests splits type
@@ -2078,7 +2098,9 @@ class TestClass(unittest.TestCase):
 
         # Test KBest feature selection
         exp_importance_df = pd.DataFrame({'Feature': ['Feature_1', 'Feature_2'],
-                                          'Score': [0.91984923, 0.08015077]})
+                                          'Score': [0.91984923, 0.08015077],
+                                          'Lower conf limit': [0.91984923, 0.08015077],
+                                          'Upper conf limit': [0.91984923, 0.08015077]})
         exp_feat_importances = OrderedDict({'Feature_1': [0.91984923 for n in range(10)],
                                             'Feature_2': [0.08015077 for n in range(10)]})
         (
@@ -2253,7 +2275,9 @@ class TestClass(unittest.TestCase):
 
         # Test tree feature selection
         exp_importance_df = pd.DataFrame({'Feature': ['Feature_1', 'Feature_2'],
-                                          'Score': [0.53276046, 0.46723954]})
+                                          'Score': [0.53276046, 0.46723954],
+                                          'Lower conf limit': [0.53276046, 0.46723954],
+                                          'Upper conf limit': [0.53276046, 0.46723954]})
         exp_feat_importances = OrderedDict({'Feature_1': [0.53276046 for n in range(10)],
                                             'Feature_2': [0.46723954 for n in range(10)]})
         (
@@ -2480,7 +2504,9 @@ class TestClass(unittest.TestCase):
             'kernel': ['rbf']
         })
         exp_importance_df = pd.DataFrame({'Feature': ['Feature_1', 'Feature_2'],
-                                          'Score': [-0.05714286, -0.06666667]})
+                                          'Score': [-0.05714286, -0.06666667],
+                                          'Lower conf limit': [-0.05714286, -0.06666667],
+                                          'Upper conf limit': [-0.05714286, -0.06666667]})
         exp_feat_importances = OrderedDict({'Feature_1': [-0.05714286 for n in range(10)],
                                             'Feature_2': [-0.06666667 for n in range(10)]})
         (
@@ -2833,11 +2859,11 @@ class TestClass(unittest.TestCase):
 
         from sklearn.linear_model import LogisticRegression
         from sklearn.neighbors import KNeighborsClassifier
-        from sklearn.svm import LinearSVC
-        from sklearn.svm import SVC
-        from sklearn.ensemble import AdaBoostClassifier
+        from sklearn.svm import LinearSVC, SVC
+        from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
         from sklearn.naive_bayes import GaussianNB
-        from sklearn.ensemble import AdaBoostRegressor
+        from sklearn.dummy import DummyClassifier
+        from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
         print('Testing define_fixed_model_params')
 
@@ -2880,6 +2906,16 @@ class TestClass(unittest.TestCase):
         act_params = test_ml_train.define_fixed_model_params(AdaBoostClassifier())
         self.assertEqual(exp_params, act_params)
 
+        # Test LinearDiscriminantAnalysis
+        exp_params = OrderedDict()
+        act_params = test_ml_train.define_fixed_model_params(LinearDiscriminantAnalysis())
+        self.assertEqual(exp_params, act_params)
+
+        # Test DummyClassifier
+        exp_params = OrderedDict({'strategy': 'prior'})
+        act_params = test_ml_train.define_fixed_model_params(DummyClassifier())
+        self.assertEqual(exp_params, act_params)
+
         # Test Gaussian Naive Bayes
         exp_params = OrderedDict()
         act_params = test_ml_train.define_fixed_model_params(GaussianNB())
@@ -2895,7 +2931,9 @@ class TestClass(unittest.TestCase):
             'sklearn.neighbors.KNeighborsClassifier()\n'
             'sklearn.svm.LinearSVC()\nsklearn.svm.SVC()\n'
             'sklearn.ensemble.AdaBoostClassifier()\n'
-            'sklearn.naive_bayes.GaussianNB()'
+            'sklearn.naive_bayes.GaussianNB()\n'
+            'sklearn.discriminant_analysis.LinearDiscriminantAnalysis()\n'
+            'sklearn.dummy.DummyClassifier()'
         )
 
         # Removes directory created by defining RunML object
@@ -2908,11 +2946,11 @@ class TestClass(unittest.TestCase):
 
         from sklearn.linear_model import LogisticRegression
         from sklearn.neighbors import KNeighborsClassifier
-        from sklearn.svm import LinearSVC
-        from sklearn.svm import SVC
-        from sklearn.ensemble import AdaBoostClassifier
+        from sklearn.svm import LinearSVC, SVC
+        from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
         from sklearn.naive_bayes import GaussianNB
-        from sklearn.ensemble import AdaBoostRegressor
+        from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+        from sklearn.dummy import DummyClassifier
 
         print('Testing define_tuned_model_params')
 
@@ -3067,6 +3105,20 @@ class TestClass(unittest.TestCase):
         )
         self.assertEqual(exp_params, act_params)
 
+        # Test Linear Discriminant Analysis
+        exp_params = OrderedDict()
+        act_params = test_ml_train.define_tuned_model_params(
+            LinearDiscriminantAnalysis(), x_train, n_folds
+        )
+        self.assertEqual(exp_params, act_params)
+
+        # Test Dummy Classifier
+        exp_params = OrderedDict()
+        act_params = test_ml_train.define_tuned_model_params(
+            DummyClassifier(), x_train, n_folds
+        )
+        self.assertEqual(exp_params, act_params)
+
         # Test unexpected classifier
         with self.assertRaises(TypeError) as message:
             act_params = test_ml_train.define_tuned_model_params(
@@ -3079,7 +3131,9 @@ class TestClass(unittest.TestCase):
             'sklearn.neighbors.KNeighborsClassifier()\n'
             'sklearn.svm.LinearSVC()\nsklearn.svm.SVC()\n'
             'sklearn.ensemble.AdaBoostClassifier()\n'
-            'sklearn.naive_bayes.GaussianNB()'
+            'sklearn.naive_bayes.GaussianNB()\n'
+            'sklearn.discriminant_analysis.LinearDiscriminantAnalysis()\n'
+            'sklearn.dummy.DummyClassifier()'
         )
 
         # Removes directory created by defining RunML object
@@ -3934,8 +3988,8 @@ class TestClass(unittest.TestCase):
                                        'recall': [0.3333333333333333, 0.5833333333333334, 0.2, 0.07692307692307693]})
         exp_average_test_scores = OrderedDict({'accuracy': 0.2983974358974359,
                                                'recall': 0.2983974358974359})
-        exp_std_test_scores = OrderedDict({'accuracy': 0.18784430364769186,
-                                           'recall': 0.18784430364769186})
+        exp_std_test_scores = OrderedDict({'accuracy': 0.21690391855346539,
+                                           'recall': 0.21690391855346539})
         exp_best_params = OrderedDict({'accuracy': OrderedDict({'metric': 'minkowski',
                                                                 'n_jobs': -1,
                                                                 'weights': 'uniform',
@@ -4035,8 +4089,8 @@ class TestClass(unittest.TestCase):
                                        'recall': [0.5384615384615384, 0.23076923076923078, 0.3333333333333333, 0.5]})
         exp_average_test_scores = OrderedDict({'f1': 0.3614583333333333,
                                                'recall': 0.4006410256410256})
-        exp_std_test_scores = OrderedDict({'f1': 0.11969864770645951,
-                                           'recall': 0.12475320805146514})
+        exp_std_test_scores = OrderedDict({'f1': 0.13821609294991716,
+                                           'recall': 0.14405259650156557})
         exp_best_params = OrderedDict({'f1': OrderedDict({'dual': False,
                                                           'random_state': 1,
                                                           'C': 0.1}),

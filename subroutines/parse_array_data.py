@@ -982,7 +982,7 @@ def draw_heatmap_fingerprints(
             sns.heatmap(
                 np.array([class_median_x_val[class_name]]),
                 vmin=class_median_x_val['min'], vmax=class_median_x_val['max'],
-                annot=False, cmap='RdBu_r', cbar=False,
+                annot=False, cmap='RdBu_r', cbar=True,
                 xticklabels=df_x_val.columns, yticklabels=False, linecolor='k',
                 linewidths=2
             )

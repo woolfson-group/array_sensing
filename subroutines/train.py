@@ -34,6 +34,7 @@ from sklearn.model_selection import (
     cross_val_score, GridSearchCV, GroupKFold, LeaveOneGroupOut, LeaveOneOut,
     RandomizedSearchCV, StratifiedKFold
 )
+from sklearn.naive_bayes import GaussianNB
 from sklearn.preprocessing import RobustScaler
 from sklearn.utils.multiclass import unique_labels
 from types import GeneratorType
@@ -283,7 +284,12 @@ def make_feat_importance_plots(
     if test is False:
         plt.show()
 
-    importance_df = pd.DataFrame({'Feature': cols, 'Score': median_vals})
+    importance_df = pd.DataFrame({
+        'Feature': cols,
+        'Score': median_vals,
+        'Lower conf limit': lower_conf_limit_vals,
+        'Upper conf limit': upper_conf_limit_vals
+    })
     importance_df = importance_df.sort_values(
         by=['Score'], axis=0, ascending=False
     ).reset_index(drop=True)
@@ -593,23 +599,33 @@ def check_arguments(
         )
 
     # Tests arguments controlling the analysis of the input data
-    if type(selected_features) != list:
+    if not type(selected_features) in [list, int]:
         raise TypeError(
-            'Expect "selected_features" to be a list of features to retain in '
-            'the analysis'
+            'Expect "selected_features" to be either a list of features to '
+            'retain in the analysis, or an integer number of features (to be '
+            'selected via permutation analysis)'
         )
     else:
-        if x_train_cols != 0:
-            if len(selected_features) > x_train_cols:
+        if type(selected_features) == list:
+            len_selected_features = len(selected_features)
+        else:
+            len_selected_features = selected_features
+            if len_selected_features < 1:
                 raise ValueError(
-                    'There is a greater number of features listed in '
+                    'The number of selected_features must be a positive integer'
+                )
+
+        if x_train_cols != 0:
+            if len_selected_features > x_train_cols:
+                raise ValueError(
+                    'There is a greater number of features in '
                     '"selected_features" than there are columns in the '
                     '"x_train" input arrays'
                 )
         if x_test_cols != 0:
-            if len(selected_features) > x_test_cols:
+            if len_selected_features > x_test_cols:
                 raise ValueError(
-                    'There is a greater number of features listed in '
+                    'There is a greater number of features in '
                     '"selected_features" than there are columns in the '
                     '"x_test" input arrays'
                 )
@@ -1706,7 +1722,7 @@ class RunML(DefData):
     def run_pca(self, fluor_data=None, scale=True, plt_name='', test=False):
         """
         Runs Principal Component Analysis and makes scatter plot of number of
-        components vs. amount of information captured, Calculates the
+        components vs. amount of information captured, calculates the
         contribution of each feature to each principal component.
 
         Input
@@ -1971,11 +1987,11 @@ class RunML(DefData):
 
     def define_fixed_model_params(self, classifier):
         """
-        For the 6 default ML algorithms run by this code (LogisticRegression,
-        KNeighborsClassifier, GaussianNB, LinearSVC, SVC and
-        AdaBoostClassifier), defines a dictionary of hyperparameters and
-        their corresponding values that will remain fixed throughout
-        optimisation and training
+        For the 8 default ML algorithms run by this code (LogisticRegression,
+        KNeighborsClassifier, GaussianNB, LinearDiscriminantAnalysis, LinearSVC,
+        SVC, AdaBoostClassifier and DummyClassifier), defines a dictionary of
+        hyperparameters and their corresponding values that will remain fixed
+        throughout optimisation and training
 
         Input
         ----------
@@ -2003,6 +2019,10 @@ class RunML(DefData):
             params = OrderedDict()
         elif type(classifier).__name__ == 'GaussianNB':
             params = OrderedDict()
+        elif type(classifier).__name__ == 'LinearDiscriminantAnalysis':
+            params = OrderedDict()
+        elif type(classifier).__name__ == 'DummyClassifier':
+            params = OrderedDict({'strategy': 'prior'})
         else:
             raise TypeError(
                 'Unrecognised value provided for "classifier". Expect '
@@ -2012,18 +2032,20 @@ class RunML(DefData):
                 'sklearn.svm.LinearSVC()\n'
                 'sklearn.svm.SVC()\n'
                 'sklearn.ensemble.AdaBoostClassifier()\n'
-                'sklearn.naive_bayes.GaussianNB()'
+                'sklearn.naive_bayes.GaussianNB()\n'
+                'sklearn.discriminant_analysis.LinearDiscriminantAnalysis()\n'
+                'sklearn.dummy.DummyClassifier()'
             )
 
         return params
 
     def define_tuned_model_params(self, classifier, x_train, n_folds=5):
         """
-        For the 6 default ML algorithms run by this code (LogisticRegression,
-        KNeighborsClassifier, GaussianNB, LinearSVC, SVC and
-        AdaBoostClassifier), returns dictionary of a sensible range of
-        values for variable hyperparameters to be tested in randomised / grid
-        search
+        For the 8 default ML algorithms run by this code (LogisticRegression,
+        KNeighborsClassifier, GaussianNB, LinearDiscriminantAnalysis, LinearSVC,
+        SVC, AdaBoostClassifier and DummyClassifier), returns dictionary of a
+        sensible range of values for variable hyperparameters to be tested in
+        randomised / grid search
 
         Input
         ----------
@@ -2094,6 +2116,10 @@ class RunML(DefData):
                 params = OrderedDict({'n_estimators': n_estimators})
         elif type(classifier).__name__ == 'GaussianNB':
             params = OrderedDict()
+        elif type(classifier).__name__ == 'LinearDiscriminantAnalysis':
+            params = OrderedDict()
+        elif type(classifier).__name__ == 'DummyClassifier':
+            params = OrderedDict()
         else:
             raise TypeError(
                 'Unrecognised value provided for "classifier". Expect '
@@ -2103,7 +2129,9 @@ class RunML(DefData):
                 'sklearn.svm.LinearSVC()\n'
                 'sklearn.svm.SVC()\n'
                 'sklearn.ensemble.AdaBoostClassifier()\n'
-                'sklearn.naive_bayes.GaussianNB()'
+                'sklearn.naive_bayes.GaussianNB()\n'
+                'sklearn.discriminant_analysis.LinearDiscriminantAnalysis()\n'
+                'sklearn.dummy.DummyClassifier()'
             )
 
         return params
@@ -2324,9 +2352,14 @@ class RunML(DefData):
             test=test
         )
         # Generates feature selection object
-        feature_selection = ManualFeatureSelection(
-            all_features=self.features, selected_features=selected_features
-        )
+        if type(selected_features) == int:
+            feature_selection = SelectKBest(
+                score_func=f_classif, k=selected_features
+            )
+        else:
+            feature_selection = ManualFeatureSelection(
+                all_features=self.features, selected_features=selected_features
+            )
         # Generates robust scaler object
         standardisation = RobustScaler()
 
@@ -2446,9 +2479,14 @@ class RunML(DefData):
             test=test
         )
         # Generates feature selection object
-        feature_selection = ManualFeatureSelection(
-            all_features=self.features, selected_features=selected_features
-        )
+        if type(selected_features) == int:
+            feature_selection = SelectKBest(
+                score_func=f_classif, k=selected_features
+            )
+        else:
+            feature_selection = ManualFeatureSelection(
+                all_features=self.features, selected_features=selected_features
+            )
         # Generates robust scaler object
         standardisation = RobustScaler()
 
@@ -2542,9 +2580,14 @@ class RunML(DefData):
             test=test
         )
         # Generates feature selection object
-        feature_selection = ManualFeatureSelection(
-            all_features=self.features, selected_features=selected_features
-        )
+        if type(selected_features) == int:
+            feature_selection = SelectKBest(
+                score_func=f_classif, k=selected_features
+            )
+        else:
+            feature_selection = ManualFeatureSelection(
+                all_features=self.features, selected_features=selected_features
+            )
         # Generates robust scaler object
         standardisation = RobustScaler()
 
@@ -3074,7 +3117,7 @@ class RunML(DefData):
             nested_cv_search['average_test_scores'][scoring_func_name] = np.mean(score_list)
         nested_cv_search['stddev_test_scores'] = OrderedDict()
         for scoring_func_name, score_list in nested_cv_search['test_scores'].items():
-            nested_cv_search['stddev_test_scores'][scoring_func_name] = np.std(score_list, ddof=0)  # Population standard deviation
+            nested_cv_search['stddev_test_scores'][scoring_func_name] = np.std(score_list, ddof=1)  # Sample standard deviation
 
         # Records which outer loop parameters lead to the best model performance
         nested_cv_search['best_outer_loop_params'] = OrderedDict()
